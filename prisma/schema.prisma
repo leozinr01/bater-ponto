@@ -1,0 +1,112 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  EMPLOYEE
+  ADMIN
+}
+
+model User {
+  id                String    @id @default(uuid())
+  name              String
+  email             String    @unique
+  password          String
+  role              UserRole
+  active            Boolean   @default(true)
+  /// Incrementado na troca de senha: tokens com versão diferente são rejeitados.
+  tokenVersion      Int       @default(0) @map("token_version")
+  workScheduleId    String?   @map("work_schedule_id")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime? @updatedAt @map("updated_at")
+
+  workSchedule   WorkSchedule? @relation(fields: [workScheduleId], references: [id])
+  punchClocks    PunchClock[]  @relation("PunchOwner")
+  createdPunches PunchClock[]  @relation("PunchCreatedBy")
+  voidedPunches  PunchClock[]  @relation("PunchVoidedBy")
+
+  @@map("users")
+}
+
+model WorkSchedule {
+  id                       String @id @default(uuid())
+  name                     String
+  /// Horário previsto de início da jornada (HH:mm, no fuso APP_TIMEZONE).
+  startTime                String @map("start_time")
+  /// Minutos de trabalho esperados por dia de trabalho.
+  dailyMinutes             Int    @map("daily_minutes")
+  /// Dias de trabalho: 0 = domingo ... 6 = sábado.
+  workDays                 Int[]  @map("work_days")
+  /// Atrasos até este limite não são computados.
+  lateToleranceMinutes     Int    @default(10) @map("late_tolerance_minutes")
+  /// Diferenças diárias (extra ou falta) até este limite não são computadas.
+  overtimeToleranceMinutes Int    @default(10) @map("overtime_tolerance_minutes")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime? @updatedAt @map("updated_at")
+
+  users User[]
+
+  @@map("work_schedules")
+}
+
+enum TypePunchClock {
+  checkIn
+  checkOut
+}
+
+enum PunchSource {
+  EMPLOYEE
+  ADMIN
+}
+
+/// Marcação de ponto. Marcações nunca são apagadas nem alteradas:
+/// correções desconsideram a original (voided*) e incluem uma nova (source = ADMIN).
+model PunchClock {
+  id        String          @id @default(uuid())
+  userId    String
+  timestamp DateTime        @default(now()) @db.Timestamptz(3)
+  source    PunchSource     @default(EMPLOYEE)
+  /// Legado: tipo informado pelo cliente na versão anterior. O cálculo usa a ordem cronológica.
+  type      TypePunchClock?
+
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  createdById String?  @map("created_by_id")
+  /// Justificativa da inclusão manual.
+  reason      String?
+  /// Marcação que esta inclusão substitui.
+  replacesId  String?  @map("replaces_id")
+
+  voidedAt   DateTime? @map("voided_at") @db.Timestamptz(3)
+  voidedById String?   @map("voided_by_id")
+  voidReason String?   @map("void_reason")
+
+  user       User         @relation("PunchOwner", fields: [userId], references: [id])
+  createdBy  User?        @relation("PunchCreatedBy", fields: [createdById], references: [id])
+  voidedBy   User?        @relation("PunchVoidedBy", fields: [voidedById], references: [id])
+  replaces   PunchClock?  @relation("PunchReplacement", fields: [replacesId], references: [id])
+  replacedBy PunchClock[] @relation("PunchReplacement")
+
+  @@index([userId, timestamp])
+  @@map("punch_clocks")
+}
+
+/// Legado: configuração global da versão anterior. Não é mais usada (ver WorkSchedule).
+/// Mantida para não descartar dados existentes; pode ser removida numa migration futura.
+model Settings {
+  id String @id @default(uuid())
+
+  workdayHours Float @map("workday_hours")
+  overtimeRate Float @map("overtime_rate")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime? @map("updated_at")
+
+  @@map("settings")
+}
