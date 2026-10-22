@@ -35,6 +35,7 @@ npm run start:dev         # desenvolvimento (watch)
 npm run build && npm run start:prod
 ```
 
+- Front-end: `cd web && npm install && npm run dev` → `http://localhost:5173` (detalhes em [web/README.md](web/README.md))
 - API: `http://localhost:3333/api`
 - Swagger: `http://localhost:3333/swagger` (faça login em `POST /api/auth/login` e use o `accessToken` no botão **Authorize**)
 
