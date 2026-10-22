@@ -2,6 +2,8 @@ import type { Tokens } from './types';
 
 const BASE_URL = `${(import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')}/api`;
 const STORAGE_KEY = 'ponto.tokens';
+/** Uma requisição pendurada vira erro em vez de deixar a tela carregando para sempre. */
+const TIMEOUT_MS = 20_000;
 
 export class ApiError extends Error {
   status: number;
@@ -79,6 +81,7 @@ function refreshTokens(): Promise<boolean> {
     try {
       const res = await fetch(buildUrl('/auth/refresh'), {
         method: 'POST',
+        signal: AbortSignal.timeout(TIMEOUT_MS),
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),
       });
@@ -107,6 +110,7 @@ export async function api<T>(
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   };
 
@@ -121,7 +125,10 @@ export async function api<T>(
         window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
       }
     }
-  } catch {
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'TimeoutError') {
+      throw new ApiError(0, 'O servidor demorou demais para responder. Tente novamente.');
+    }
     throw new ApiError(0, 'Não foi possível conectar ao servidor.');
   }
 
