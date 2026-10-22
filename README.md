@@ -193,4 +193,4 @@ Fora do escopo desta etapa, mas necessário antes do uso real:
 
 ### Dados legados
 
-A migration `nucleo_ponto` não apaga dados da versão anterior: a coluna `punch_clocks.type` e a tabela `settings` foram mantidas, mas não são mais usadas. Os horários existentes foram convertidos para `timestamptz` preservando o instante (eram UTC). Depois de confirmar que não há nada a aproveitar nelas, podem ser removidas numa migration futura.
+A migration `nucleo_ponto` converteu os horários da versão anterior para `timestamptz` preservando o instante (eram UTC). A migration `remove_legado` apaga o que não é mais usado: a coluna `punch_clocks.type` (o tipo agora vem da ordem cronológica) e a tabela `settings` (substituída pelas jornadas). **Antes de aplicá-la num banco com dados da versão anterior**, confira se não há nada a aproveitar nelas.

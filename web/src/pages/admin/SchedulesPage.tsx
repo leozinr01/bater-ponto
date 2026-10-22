@@ -1,3 +1,4 @@
+import { CalendarClock, Clock, Hourglass, Pencil, Plus } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useToast } from '../../components/toast';
 import { Alert, Button, Card, cn, EmptyState, Field, Input, Loading, Modal, PageHeader } from '../../components/ui';
@@ -47,7 +48,9 @@ function ScheduleFormModal({ schedule, onClose }: { schedule: WorkSchedule | nul
     <Modal
       open
       onClose={onClose}
+      icon={schedule ? Pencil : CalendarClock}
       title={schedule ? `Editar ${schedule.name}` : 'Nova jornada'}
+      description="Usada nos registros para calcular atrasos, horas extras e faltas."
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
@@ -59,11 +62,11 @@ function ScheduleFormModal({ schedule, onClose }: { schedule: WorkSchedule | nul
         </>
       }
     >
-      <form id="schedule-form" onSubmit={onSubmit} className="space-y-4">
+      <form id="schedule-form" onSubmit={onSubmit} className="space-y-5">
         {save.isError && <Alert>{errorMessage(save.error)}</Alert>}
         {schedule && (
           <Alert tone="info">
-            O espelho sempre usa a jornada atual, inclusive para períodos passados dos funcionários que a utilizam.
+            Os registros sempre usam a jornada atual, inclusive nos meses passados de quem a utiliza.
           </Alert>
         )}
         <Field label="Nome">
@@ -79,12 +82,12 @@ function ScheduleFormModal({ schedule, onClose }: { schedule: WorkSchedule | nul
           )}
         </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Entrada prevista" hint="Usada para calcular atrasos.">
+          <Field label="Entrada prevista" hint="Base para calcular atrasos.">
             {(id) => (
               <Input id={id} type="time" required value={startTime} onChange={(e) => setStartTime(e.target.value)} />
             )}
           </Field>
-          <Field label="Carga diária" hint="Horas:minutos de trabalho por dia.">
+          <Field label="Carga diária" hint="Horas:minutos por dia.">
             {(id) => (
               <Input
                 id={id}
@@ -98,8 +101,8 @@ function ScheduleFormModal({ schedule, onClose }: { schedule: WorkSchedule | nul
           </Field>
         </div>
         <div>
-          <span className="mb-1 block text-sm font-medium text-slate-700">Dias de trabalho</span>
-          <div className="flex flex-wrap gap-1.5">
+          <span className="mb-1.5 block text-[13px] font-medium text-slate-300">Dias de trabalho</span>
+          <div className="grid grid-cols-7 gap-1.5">
             {WEEK_ORDER.map((d) => (
               <button
                 key={d}
@@ -107,20 +110,20 @@ function ScheduleFormModal({ schedule, onClose }: { schedule: WorkSchedule | nul
                 onClick={() => toggleDay(d)}
                 aria-pressed={workDays.includes(d)}
                 className={cn(
-                  'w-12 rounded-lg py-1.5 text-sm font-medium ring-1 ring-inset transition-colors',
+                  'rounded-xl py-2.5 text-sm font-medium ring-1 ring-inset transition-all active:scale-95',
                   workDays.includes(d)
-                    ? 'bg-indigo-600 text-white ring-indigo-600'
-                    : 'bg-white text-slate-600 ring-slate-300 hover:bg-slate-50',
+                    ? 'bg-brand-500 text-white ring-brand-400 shadow-lg shadow-brand-500/20'
+                    : 'bg-ink-800 text-slate-400 ring-white/10 hover:text-white',
                 )}
               >
                 {WEEKDAYS[d]}
               </button>
             ))}
           </div>
-          {workDays.length === 0 && <p className="mt-1 text-xs text-red-600">Selecione pelo menos um dia.</p>}
+          {workDays.length === 0 && <p className="mt-1.5 text-xs text-red-400">Selecione pelo menos um dia.</p>}
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Tolerância de atraso" hint="Minutos (0 a 120).">
+          <Field label="Tolerância de atraso" hint="Em minutos (0 a 120).">
             {(id) => (
               <Input
                 id={id}
@@ -133,7 +136,7 @@ function ScheduleFormModal({ schedule, onClose }: { schedule: WorkSchedule | nul
               />
             )}
           </Field>
-          <Field label="Tolerância de saldo" hint="Extra/falta diária ignorada, em minutos.">
+          <Field label="Tolerância de saldo" hint="Extra ou falta diária ignorada.">
             {(id) => (
               <Input
                 id={id}
@@ -159,46 +162,94 @@ export function SchedulesPage() {
   return (
     <>
       <PageHeader
+        icon={CalendarClock}
         title="Jornadas de trabalho"
-        description="Horário de entrada, carga diária, dias e tolerâncias usados no cálculo do espelho."
-        actions={<Button onClick={() => setEditing('new')}>Nova jornada</Button>}
+        description="Entrada, carga diária, dias e tolerâncias usados no cálculo dos registros."
+        actions={
+          <Button icon={Plus} onClick={() => setEditing('new')}>
+            Nova jornada
+          </Button>
+        }
       />
 
       {schedules.isPending ? (
-        <Loading />
+        <Loading rows={3} />
       ) : schedules.isError ? (
         <Alert>{errorMessage(schedules.error)}</Alert>
       ) : schedules.data.data.length === 0 ? (
         <Card>
-          <EmptyState>Nenhuma jornada cadastrada. Crie uma para calcular atrasos, extras e faltas.</EmptyState>
+          <EmptyState
+            icon={CalendarClock}
+            action={
+              <Button size="sm" icon={Plus} onClick={() => setEditing('new')}>
+                Criar primeira jornada
+              </Button>
+            }
+          >
+            Nenhuma jornada cadastrada. Crie uma para calcular atrasos, extras e faltas.
+          </EmptyState>
         </Card>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {schedules.data.data.map((s) => (
-            <Card key={s.id} className="flex flex-col p-5">
-              <div className="flex items-start justify-between gap-2">
-                <h2 className="font-semibold text-slate-900">{s.name}</h2>
-                <Button size="sm" variant="ghost" onClick={() => setEditing(s)}>
-                  Editar
-                </Button>
+            <Card
+              key={s.id}
+              className="group relative flex flex-col overflow-hidden p-5 transition-all hover:-translate-y-0.5 hover:ring-brand-400/30"
+            >
+              <div className="pointer-events-none absolute -top-16 -right-16 size-40 rounded-full bg-brand-500/10 blur-2xl transition-opacity group-hover:opacity-100 sm:opacity-0" />
+              <div className="relative flex items-start justify-between gap-2">
+                <div>
+                  <h2 className="font-semibold text-white">{s.name}</h2>
+                  <p className="text-xs text-slate-500">{s.workDays.length} dias por semana</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditing(s)}
+                  title="Editar jornada"
+                  aria-label={`Editar ${s.name}`}
+                  className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-white/5 hover:text-white"
+                >
+                  <Pencil className="size-4" />
+                </button>
               </div>
-              <p className="mt-1 text-3xl font-semibold tabular-nums">{formatDuration(s.dailyMinutes)}</p>
-              <p className="text-sm text-slate-500">por dia, entrada às {s.startTime}</p>
-              <div className="mt-4 flex gap-1">
+
+              <div className="relative mt-5 flex items-baseline gap-2">
+                <span className="text-4xl font-bold tracking-tight text-white">{formatDuration(s.dailyMinutes)}</span>
+                <span className="text-sm text-slate-500">por dia</span>
+              </div>
+
+              <div className="relative mt-4 grid grid-cols-2 gap-2 text-sm">
+                <div className="flex items-center gap-2 rounded-xl bg-white/[0.03] px-3 py-2 ring-1 ring-white/[0.06]">
+                  <Clock className="size-4 text-slate-500" />
+                  <span className="text-slate-300">
+                    Entrada <span className="font-semibold text-white tabular-nums">{s.startTime}</span>
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 rounded-xl bg-white/[0.03] px-3 py-2 ring-1 ring-white/[0.06]">
+                  <Hourglass className="size-4 text-slate-500" />
+                  <span className="text-slate-300">
+                    <span className="font-semibold text-white">{s.lateToleranceMinutes}</span> min tol.
+                  </span>
+                </div>
+              </div>
+
+              <div className="relative mt-4 flex gap-1">
                 {WEEK_ORDER.map((d) => (
                   <span
                     key={d}
                     className={cn(
-                      'flex-1 rounded py-1 text-center text-xs font-medium',
-                      s.workDays.includes(d) ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-50 text-slate-300',
+                      'flex-1 rounded-lg py-1.5 text-center text-xs font-medium',
+                      s.workDays.includes(d)
+                        ? 'bg-brand-500/15 text-brand-200 ring-1 ring-brand-400/20'
+                        : 'bg-white/[0.02] text-slate-600',
                     )}
                   >
                     {WEEKDAYS[d]}
                   </span>
                 ))}
               </div>
-              <p className="mt-4 text-xs text-slate-500">
-                Tolerâncias: {s.lateToleranceMinutes} min de atraso · {s.overtimeToleranceMinutes} min de saldo
+              <p className="relative mt-4 text-xs text-slate-500">
+                Saldo diário de até {s.overtimeToleranceMinutes} min é ignorado.
               </p>
             </Card>
           ))}

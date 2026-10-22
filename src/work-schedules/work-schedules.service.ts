@@ -23,7 +23,8 @@ export class WorkSchedulesService {
   }
 
   async list(query: PaginationQueryDto) {
-    const [data, total] = await this.prisma.$transaction([
+    // Página e total em paralelo: numa lista, não precisam da mesma transação
+    const [data, total] = await Promise.all([
       this.prisma.workSchedule.findMany({
         orderBy: [{ name: 'asc' }, { id: 'asc' }],
         ...toPrismaPage(query),

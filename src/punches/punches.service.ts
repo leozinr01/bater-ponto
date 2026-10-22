@@ -106,7 +106,8 @@ export class PunchesService {
       };
     }
 
-    const [punches, total] = await this.prisma.$transaction([
+    // Página e total em paralelo: numa lista, não precisam da mesma transação
+    const [punches, total] = await Promise.all([
       this.prisma.punchClock.findMany({
         where,
         orderBy: [{ timestamp: 'desc' }, { id: 'asc' }],
@@ -148,7 +149,8 @@ export class PunchesService {
     this.assertPeriod(query.from, query.to);
 
     const where: Prisma.UserWhereInput = { id: query.employeeId };
-    const [employees, total] = await this.prisma.$transaction([
+    // Página e total em paralelo: numa lista, não precisam da mesma transação
+    const [employees, total] = await Promise.all([
       this.prisma.user.findMany({
         where,
         include: { workSchedule: true },

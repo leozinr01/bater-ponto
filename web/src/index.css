@@ -1,19 +1,157 @@
+@import '@fontsource-variable/inter';
 @import 'tailwindcss';
 
 @theme {
-  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  /* Cor da marca TAI Project: troque aqui para mudar o sistema inteiro */
+  --color-brand-50: #eef4ff;
+  --color-brand-100: #dbe6ff;
+  --color-brand-200: #bfd3ff;
+  --color-brand-300: #93b4ff;
+  --color-brand-400: #6090ff;
+  --color-brand-500: #3b6dff;
+  --color-brand-600: #2f56f5;
+  --color-brand-700: #2443d8;
+  --color-brand-800: #2238ae;
+  --color-brand-900: #223489;
+  --color-brand-950: #192153;
+
+  /*
+   * Superfícies do tema escuro (azul-marinho, nunca preto puro):
+   * 950 menu lateral · 900 fundo da página · 850 cards · 800 campos e hover · 700/600 bordas fortes
+   */
+  --color-ink-600: #2c3a5c;
+  --color-ink-700: #222d49;
+  --color-ink-800: #18213a;
+  --color-ink-850: #121a2f;
+  --color-ink-900: #0d1426;
+  --color-ink-950: #080d1a;
+
+  --animate-pulse-ring: pulse-ring 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-fade-in: fade-in 0.35s ease-out both;
+  --animate-minute-wave: minute-wave 1.4s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  --animate-hour-wave: minute-wave 2.2s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  --animate-flash-green: flash-green 1.4s ease-out both;
+  --animate-phone-float: phone-float 7s ease-in-out infinite;
+
+  /* Celular de demonstração da tela de login: sobe e desce devagar */
+  @keyframes phone-float {
+    0%,
+    100% {
+      transform: translateY(0) rotate(-2deg);
+    }
+    50% {
+      transform: translateY(-14px) rotate(-1deg);
+    }
+  }
+
+  /* Onda verde que sai do anel de horas a cada minuto trabalhado */
+  @keyframes minute-wave {
+    0% {
+      opacity: 0.9;
+      transform: scale(0.82);
+      box-shadow: 0 0 0 0 rgb(52 211 153 / 0.6);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(1.45);
+      box-shadow: 0 0 24px 6px rgb(52 211 153 / 0);
+    }
+  }
+
+  @keyframes flash-green {
+    0%,
+    30% {
+      color: var(--color-emerald-300);
+      transform: scale(1.12);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  @keyframes pulse-ring {
+    0% {
+      box-shadow: 0 0 0 0 rgb(59 109 255 / 0.45);
+    }
+    70% {
+      box-shadow: 0 0 0 18px rgb(59 109 255 / 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgb(59 109 255 / 0);
+    }
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
 }
 
 html {
-  color-scheme: light;
+  /* Calendários, relógios e listas nativas no tema escuro */
+  color-scheme: dark;
 }
 
 body {
-  @apply bg-slate-50 text-slate-900 antialiased;
+  @apply bg-ink-900 text-slate-100 antialiased;
+  /* Sensação de app: sem "puxar" a página inteira nem flash azul ao tocar */
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+  font-feature-settings: 'cv11', 'ss01';
 }
 
+::selection {
+  @apply bg-brand-500/40 text-white;
+}
+
+/* Barra de rolagem discreta */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-ink-600) transparent;
+}
+
+select option {
+  @apply bg-ink-800 text-slate-100;
+}
+
+/* Ícone do calendário/relógio nativo claro o suficiente no fundo escuro */
+input::-webkit-calendar-picker-indicator {
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+/* Impressão (espelho de ponto): papel branco, texto preto, sem fundos */
 @media print {
+  html {
+    color-scheme: light;
+  }
   body {
-    background: white;
+    background: #fff !important;
+  }
+  * {
+    color: #000 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    border-color: #ccc !important;
+    --tw-ring-color: #ccc !important;
+  }
+}
+
+/* Quem prefere menos movimento não vê as animações decorativas */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

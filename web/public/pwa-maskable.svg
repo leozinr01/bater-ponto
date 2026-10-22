@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6090ff" />
+      <stop offset="1" stop-color="#2443d8" />
+    </linearGradient>
+  </defs>
+  <!-- Fundo de ponta a ponta: Android e iOS recortam o formato sozinhos -->
+  <rect width="512" height="512" fill="url(#bg)" />
+  <!-- Letras menores, dentro da zona segura (círculo central de 80%) -->
+  <g fill="#ffffff" transform="translate(256 256) scale(0.8) translate(-256 -256) translate(-10 0)">
+    <path d="M96 176h120v40h-40v120h-40V216H96z" />
+    <path fill-rule="evenodd" d="M236 336l50-160h40l50 160h-40l-10-34h-40l-10 34zM294 270h24l-12-44z" />
+    <path d="M396 176h40v160h-40z" />
+  </g>
+</svg>

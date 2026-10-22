@@ -1,12 +1,25 @@
+import { ArrowRight, CalendarX, ChartColumn, Download, Hourglass, Timer, TriangleAlert } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Balance } from '../../components/timesheet';
-import { Alert, Button, Card, cn, EmptyState, Loading, PageHeader, Pagination } from '../../components/ui';
+import {
+  Alert,
+  Avatar,
+  Button,
+  Card,
+  cn,
+  EmptyState,
+  Loading,
+  PageHeader,
+  Pagination,
+  Stat,
+  table,
+} from '../../components/ui';
 import { api, errorMessage } from '../../lib/api';
 import { currentMonth, formatDate, formatMinutes, monthRange } from '../../lib/format';
 import { useReport } from '../../lib/queries';
 import type { Paginated, ReportItem } from '../../lib/types';
-import { MonthNav } from '../TimesheetPage';
+import { MonthNav } from '../../components/MonthNav';
 
 /** Busca todas as páginas do relatório e baixa como CSV (abre no Excel). */
 async function exportCsv(from: string, to: string) {
@@ -16,7 +29,16 @@ async function exportCsv(from: string, to: string) {
     items.push(...res.data);
     if (page >= res.meta.totalPages) break;
   }
-  const header = ['Funcionário', 'Trabalhado', 'Previsto', 'Horas extras', 'Falta de horas', 'Atrasos', 'Faltas (dias)', 'Dias incompletos'];
+  const header = [
+    'Funcionário',
+    'Trabalhado',
+    'Previsto',
+    'Horas extras',
+    'Falta de horas',
+    'Atrasos',
+    'Faltas (dias)',
+    'Dias incompletos',
+  ];
   const rows = items.map(({ employee, totals: t }) => [
     employee.name,
     formatMinutes(t.workedMinutes),
@@ -27,9 +49,7 @@ async function exportCsv(from: string, to: string) {
     t.absentDays,
     t.incompleteDays,
   ]);
-  const csv = [header, ...rows]
-    .map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(';'))
-    .join('\r\n');
+  const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\r\n');
   const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
   const a = document.createElement('a');
   a.href = url;
@@ -37,6 +57,9 @@ async function exportCsv(from: string, to: string) {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+const sum = (items: ReportItem[], pick: (i: ReportItem) => number | null) =>
+  items.reduce((acc, i) => acc + (pick(i) ?? 0), 0);
 
 export function ReportPage() {
   const [month, setMonth] = useState(currentMonth());
@@ -58,9 +81,14 @@ export function ReportPage() {
     }
   };
 
+  const items = report.data?.data ?? [];
+  // Os totais gerais só fazem sentido quando todos os funcionários cabem numa página
+  const allInOnePage = report.data?.meta.totalPages === 1;
+
   return (
     <>
       <PageHeader
+        icon={ChartColumn}
         title="Relatório do período"
         description={`Totais por funcionário de ${formatDate(from)} a ${formatDate(to)}.`}
         actions={
@@ -72,7 +100,7 @@ export function ReportPage() {
                 setPage(1);
               }}
             />
-            <Button variant="secondary" size="sm" onClick={onExport} loading={exporting}>
+            <Button variant="secondary" icon={Download} onClick={onExport} loading={exporting}>
               Exportar CSV
             </Button>
           </>
@@ -90,71 +118,127 @@ export function ReportPage() {
       ) : report.isError ? (
         <Alert>{errorMessage(report.error)}</Alert>
       ) : (
-        <Card className={cn('overflow-hidden', report.isFetching && 'opacity-70')}>
-          {report.data.data.length === 0 ? (
-            <EmptyState>Nenhum funcionário cadastrado.</EmptyState>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 text-left text-xs font-medium tracking-wide text-slate-500 uppercase">
-                  <tr>
-                    <th className="px-4 py-3">Funcionário</th>
-                    <th className="px-4 py-3 text-right">Trabalhado</th>
-                    <th className="px-4 py-3 text-right">Previsto</th>
-                    <th className="px-4 py-3 text-right">Saldo</th>
-                    <th className="px-4 py-3 text-right">Atrasos</th>
-                    <th className="px-4 py-3 text-right">Faltas</th>
-                    <th className="px-4 py-3 text-right">Incompletos</th>
-                    <th className="px-4 py-3" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {report.data.data.map(({ employee, totals: t }) => (
-                    <tr key={employee.id}>
-                      <td className="px-4 py-3 font-medium text-slate-900">{employee.name}</td>
-                      <td className="px-4 py-3 text-right tabular-nums">{formatMinutes(t.workedMinutes)}</td>
-                      <td className="px-4 py-3 text-right text-slate-500 tabular-nums">
-                        {formatMinutes(t.expectedMinutes)}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        <Balance overtime={t.overtimeMinutes} deficit={t.deficitMinutes} />
-                      </td>
-                      <td className={cn('px-4 py-3 text-right tabular-nums', !!t.lateMinutes && 'text-amber-600')}>
-                        {t.lateMinutes ? formatMinutes(t.lateMinutes) : '–'}
-                      </td>
-                      <td className={cn('px-4 py-3 text-right tabular-nums', t.absentDays > 0 && 'font-medium text-red-600')}>
-                        {t.absentDays}
-                      </td>
-                      <td
-                        className={cn('px-4 py-3 text-right tabular-nums', t.incompleteDays > 0 && 'font-medium text-amber-600')}
-                      >
-                        {t.incompleteDays}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <Link
-                          to={`/espelho?funcionario=${employee.id}${month === currentMonth() ? '' : `&mes=${month}`}`}
-                          className="text-sm font-medium whitespace-nowrap text-indigo-600 hover:text-indigo-700"
-                        >
-                          Ver espelho →
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <div className={cn('space-y-6 transition-opacity', report.isFetching && 'opacity-60')}>
+          {allInOnePage && items.length > 0 && (
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <Stat
+                label="Horas trabalhadas"
+                icon={Timer}
+                tone="brand"
+                value={formatMinutes(sum(items, (i) => i.totals.workedMinutes))}
+                hint={`${items.length} funcionário(s)`}
+              />
+              <Stat
+                label="Saldo da equipe"
+                icon={Hourglass}
+                tone="brand"
+                value={
+                  <Balance
+                    overtime={sum(items, (i) => i.totals.overtimeMinutes)}
+                    deficit={sum(items, (i) => i.totals.deficitMinutes)}
+                  />
+                }
+              />
+              <Stat
+                label="Faltas"
+                icon={CalendarX}
+                value={sum(items, (i) => i.totals.absentDays)}
+                tone={sum(items, (i) => i.totals.absentDays) ? 'red' : undefined}
+                hint="dias, somando todos"
+              />
+              <Stat
+                label="Dias incompletos"
+                icon={TriangleAlert}
+                value={sum(items, (i) => i.totals.incompleteDays)}
+                tone={sum(items, (i) => i.totals.incompleteDays) ? 'amber' : undefined}
+                hint="precisam de correção"
+              />
             </div>
           )}
-          <Pagination
-            page={report.data.meta.page}
-            totalPages={report.data.meta.totalPages}
-            total={report.data.meta.total}
-            onChange={setPage}
-          />
-        </Card>
+
+          <Card className="overflow-hidden">
+            {items.length === 0 ? (
+              <EmptyState icon={ChartColumn}>Nenhum funcionário cadastrado.</EmptyState>
+            ) : (
+              <div className={table.wrap}>
+                <table className={table.table}>
+                  <thead className={table.thead}>
+                    <tr>
+                      <th className={table.th}>Funcionário</th>
+                      <th className={cn(table.th, 'text-right')}>Trabalhado</th>
+                      <th className={cn(table.th, 'text-right')}>Previsto</th>
+                      <th className={cn(table.th, 'text-right')}>Saldo</th>
+                      <th className={cn(table.th, 'text-right')}>Atrasos</th>
+                      <th className={cn(table.th, 'text-right')}>Faltas</th>
+                      <th className={cn(table.th, 'text-right')}>Incompletos</th>
+                      <th className={table.th} />
+                    </tr>
+                  </thead>
+                  <tbody className={table.tbody}>
+                    {items.map(({ employee, totals: t }) => (
+                      <tr key={employee.id} className={cn(table.tr, 'group')}>
+                        <td className={table.td}>
+                          <div className="flex items-center gap-3">
+                            <Avatar name={employee.name} size="sm" />
+                            <span className="font-medium text-white">{employee.name}</span>
+                          </div>
+                        </td>
+                        <td className={cn(table.td, 'text-right font-medium text-slate-200 tabular-nums')}>
+                          {formatMinutes(t.workedMinutes)}
+                        </td>
+                        <td className={cn(table.td, 'text-right text-slate-500 tabular-nums')}>
+                          {formatMinutes(t.expectedMinutes)}
+                        </td>
+                        <td className={cn(table.td, 'text-right font-medium tabular-nums')}>
+                          <Balance overtime={t.overtimeMinutes} deficit={t.deficitMinutes} />
+                        </td>
+                        <td className={cn(table.td, 'text-right tabular-nums')}>
+                          {t.lateMinutes ? (
+                            <span className="text-amber-300">{formatMinutes(t.lateMinutes)}</span>
+                          ) : (
+                            <span className="text-slate-600">–</span>
+                          )}
+                        </td>
+                        <td className={cn(table.td, 'text-right tabular-nums')}>
+                          {t.absentDays > 0 ? (
+                            <span className="font-semibold text-red-300">{t.absentDays}</span>
+                          ) : (
+                            <span className="text-slate-600">0</span>
+                          )}
+                        </td>
+                        <td className={cn(table.td, 'text-right tabular-nums')}>
+                          {t.incompleteDays > 0 ? (
+                            <span className="font-semibold text-amber-300">{t.incompleteDays}</span>
+                          ) : (
+                            <span className="text-slate-600">0</span>
+                          )}
+                        </td>
+                        <td className={cn(table.td, 'text-right')}>
+                          <Link
+                            to={`/registros?funcionario=${employee.id}${month === currentMonth() ? '' : `&mes=${month}`}`}
+                            className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[13px] font-medium whitespace-nowrap text-brand-300 transition-colors hover:bg-brand-500/10 hover:text-brand-200"
+                          >
+                            Registros <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <Pagination
+              page={report.data.meta.page}
+              totalPages={report.data.meta.totalPages}
+              total={report.data.meta.total}
+              onChange={setPage}
+            />
+          </Card>
+          <p className="text-xs text-slate-500">
+            Saldo = horas extras − falta de horas. Dias incompletos só entram no saldo depois de corrigidos.
+          </p>
+        </div>
       )}
-      <p className="mt-3 text-xs text-slate-400">
-        Saldo = horas extras − falta de horas. Dias incompletos não entram no saldo até serem corrigidos.
-      </p>
     </>
   );
 }

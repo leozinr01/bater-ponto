@@ -1,8 +1,10 @@
+import { CalendarDays, KeyRound, Pencil, Power, Search, UserPlus, Users } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useToast } from '../../components/toast';
 import {
   Alert,
+  Avatar,
   Badge,
   Button,
   Card,
@@ -14,7 +16,9 @@ import {
   Modal,
   PageHeader,
   Pagination,
+  Segmented,
   Select,
+  table,
 } from '../../components/ui';
 import { errorMessage } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
@@ -67,7 +71,9 @@ function EmployeeFormModal({ employee, onClose }: { employee: Employee | null; o
     <Modal
       open
       onClose={onClose}
+      icon={isNew ? UserPlus : Pencil}
       title={isNew ? 'Novo funcionário' : `Editar ${employee.name}`}
+      description={isNew ? 'O funcionário entra com o e-mail e a senha inicial.' : undefined}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
@@ -81,16 +87,14 @@ function EmployeeFormModal({ employee, onClose }: { employee: Employee | null; o
     >
       <form id="employee-form" onSubmit={onSubmit} className="space-y-4">
         {save.isError && <Alert>{errorMessage(save.error)}</Alert>}
-        <Field label="Nome">
+        <Field label="Nome completo">
           {(id) => <Input id={id} required maxLength={120} value={name} onChange={(e) => setName(e.target.value)} />}
         </Field>
         <Field label="E-mail">
-          {(id) => (
-            <Input id={id} type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-          )}
+          {(id) => <Input id={id} type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />}
         </Field>
         {isNew && (
-          <Field label="Senha inicial" hint="Mínimo de 8 caracteres. O funcionário pode trocá-la depois em Minha conta.">
+          <Field label="Senha inicial" hint="Mínimo de 8 caracteres. O funcionário pode trocá-la em Minha conta.">
             {(id) => (
               <Input
                 id={id}
@@ -105,33 +109,41 @@ function EmployeeFormModal({ employee, onClose }: { employee: Employee | null; o
             )}
           </Field>
         )}
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Perfil" hint={isSelf ? 'Você não pode alterar o próprio perfil.' : undefined}>
-            {(id) => (
-              <Select id={id} value={role} disabled={isSelf} onChange={(e) => setRole(e.target.value as Role)}>
-                <option value="EMPLOYEE">Funcionário</option>
-                <option value="ADMIN">Administrador</option>
-              </Select>
-            )}
-          </Field>
-          <Field label="Jornada">
-            {(id) => (
-              <Select id={id} value={workScheduleId} onChange={(e) => setWorkScheduleId(e.target.value)}>
-                <option value="">Sem jornada</option>
-                {schedules.data?.data.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} ({formatDuration(s.dailyMinutes)}, {s.startTime})
-                  </option>
-                ))}
-              </Select>
-            )}
-          </Field>
+        <div>
+          <span className="mb-1.5 block text-[13px] font-medium text-slate-300">Perfil</span>
+          {isSelf ? (
+            <p className="text-sm text-slate-500">Você não pode alterar o próprio perfil.</p>
+          ) : (
+            <Segmented
+              className="flex w-full"
+              value={role}
+              onChange={setRole}
+              options={[
+                { value: 'EMPLOYEE', label: 'Funcionário' },
+                { value: 'ADMIN', label: 'Administrador' },
+              ]}
+            />
+          )}
         </div>
-        {!workScheduleId && (
-          <p className="text-xs text-slate-500">
-            Sem jornada, o espelho calcula as horas trabalhadas, mas não atrasos, extras e faltas.
-          </p>
-        )}
+        <Field
+          label="Jornada"
+          hint={
+            !workScheduleId
+              ? 'Sem jornada, os registros mostram as horas trabalhadas, mas não atrasos, extras e faltas.'
+              : undefined
+          }
+        >
+          {(id) => (
+            <Select id={id} value={workScheduleId} onChange={(e) => setWorkScheduleId(e.target.value)}>
+              <option value="">Sem jornada</option>
+              {schedules.data?.data.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name} ({formatDuration(s.dailyMinutes)}, entrada {s.startTime})
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
       </form>
     </Modal>
   );
@@ -159,6 +171,7 @@ function ResetPasswordModal({ employee, onClose }: { employee: Employee; onClose
     <Modal
       open
       onClose={onClose}
+      icon={KeyRound}
       title="Redefinir senha"
       description={`${employee.name} será desconectado(a) de todas as sessões.`}
       footer={
@@ -193,10 +206,46 @@ function ResetPasswordModal({ employee, onClose }: { employee: Employee; onClose
   );
 }
 
+/** Botão só de ícone, com dica ao passar o mouse. */
+function IconAction({
+  label,
+  icon: IconCmp,
+  onClick,
+  danger,
+  disabled,
+}: {
+  label: string;
+  icon: typeof Pencil;
+  onClick: () => void;
+  danger?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        'rounded-lg p-2 text-slate-500 transition-colors disabled:opacity-40',
+        danger ? 'hover:bg-red-500/10 hover:text-red-300' : 'hover:bg-white/5 hover:text-white',
+      )}
+    >
+      <IconCmp className="size-4" />
+    </button>
+  );
+}
+
+type StatusFilter = 'active' | 'inactive' | 'all';
+type RoleFilter = 'all' | Role;
+
 export function EmployeesPage() {
   const { user } = useAuth();
   const toast = useToast();
   const [search, setSearch] = useState('');
+  const [status, setStatus] = useState<StatusFilter>('active');
+  const [role, setRole] = useState<RoleFilter>('all');
   const [filters, setFilters] = useState<EmployeeFilters>({ active: true, page: 1, pageSize: 20 });
   const employees = useEmployees(filters);
   const schedules = useSchedules();
@@ -209,8 +258,16 @@ export function EmployeesPage() {
     return () => clearTimeout(id);
   }, [search]);
 
-  const scheduleName = (id: string | null) =>
-    id ? (schedules.data?.data.find((s) => s.id === id)?.name ?? '…') : null;
+  const onStatus = (value: StatusFilter) => {
+    setStatus(value);
+    setFilters((f) => ({ ...f, page: 1, active: value === 'all' ? undefined : value === 'active' }));
+  };
+  const onRole = (value: RoleFilter) => {
+    setRole(value);
+    setFilters((f) => ({ ...f, page: 1, role: value === 'all' ? undefined : value }));
+  };
+
+  const schedule = (id: string | null) => (id ? schedules.data?.data.find((s) => s.id === id) : undefined);
 
   const toggleActive = (e: Employee) =>
     setActive.mutate(
@@ -224,41 +281,45 @@ export function EmployeesPage() {
   return (
     <>
       <PageHeader
+        icon={Users}
         title="Funcionários"
-        description="Funcionários não são excluídos: desative o acesso e os registros são mantidos."
-        actions={<Button onClick={() => setEditing('new')}>Novo funcionário</Button>}
+        description="Ninguém é excluído: desative o acesso e os registros são mantidos."
+        actions={
+          <Button icon={UserPlus} onClick={() => setEditing('new')}>
+            Novo funcionário
+          </Button>
+        }
       />
 
-      <Card className="mb-4 flex flex-wrap items-center gap-3 p-4">
-        <Input
-          type="search"
-          placeholder="Buscar por nome ou e-mail"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full sm:w-72"
+      <Card className="mb-6 flex flex-wrap items-center gap-3 p-4">
+        <div className="relative w-full sm:w-72">
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-slate-500" />
+          <Input
+            type="search"
+            placeholder="Buscar por nome ou e-mail"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Segmented
+          value={status}
+          onChange={onStatus}
+          options={[
+            { value: 'active', label: 'Ativos' },
+            { value: 'inactive', label: 'Inativos' },
+            { value: 'all', label: 'Todos' },
+          ]}
         />
-        <Select
-          value={filters.active === undefined ? '' : String(filters.active)}
-          onChange={(e) =>
-            setFilters((f) => ({ ...f, page: 1, active: e.target.value === '' ? undefined : e.target.value === 'true' }))
-          }
-          className="w-auto"
-          aria-label="Status"
-        >
-          <option value="true">Ativos</option>
-          <option value="false">Inativos</option>
-          <option value="">Todos</option>
-        </Select>
-        <Select
-          value={filters.role ?? ''}
-          onChange={(e) => setFilters((f) => ({ ...f, page: 1, role: (e.target.value || undefined) as Role }))}
-          className="w-auto"
-          aria-label="Perfil"
-        >
-          <option value="">Todos os perfis</option>
-          <option value="EMPLOYEE">Funcionários</option>
-          <option value="ADMIN">Administradores</option>
-        </Select>
+        <Segmented
+          value={role}
+          onChange={onRole}
+          options={[
+            { value: 'all', label: 'Todos os perfis' },
+            { value: 'EMPLOYEE', label: 'Funcionários' },
+            { value: 'ADMIN', label: 'Admins' },
+          ]}
+        />
       </Card>
 
       {employees.isPending ? (
@@ -266,71 +327,102 @@ export function EmployeesPage() {
       ) : employees.isError ? (
         <Alert>{errorMessage(employees.error)}</Alert>
       ) : (
-        <Card className={cn('overflow-hidden', employees.isFetching && 'opacity-70')}>
+        <Card className={cn('overflow-hidden transition-opacity', employees.isFetching && 'opacity-60')}>
           {employees.data.data.length === 0 ? (
-            <EmptyState>Nenhum funcionário encontrado.</EmptyState>
+            <EmptyState
+              icon={Users}
+              action={
+                <Button size="sm" icon={UserPlus} onClick={() => setEditing('new')}>
+                  Cadastrar funcionário
+                </Button>
+              }
+            >
+              Nenhum funcionário encontrado com esses filtros.
+            </EmptyState>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 text-left text-xs font-medium tracking-wide text-slate-500 uppercase">
+            <div className={table.wrap}>
+              <table className={table.table}>
+                <thead className={table.thead}>
                   <tr>
-                    <th className="px-4 py-3">Nome</th>
-                    <th className="px-4 py-3">Perfil</th>
-                    <th className="px-4 py-3">Jornada</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Desde</th>
-                    <th className="px-4 py-3" />
+                    <th className={table.th}>Funcionário</th>
+                    <th className={table.th}>Perfil</th>
+                    <th className={table.th}>Jornada</th>
+                    <th className={table.th}>Status</th>
+                    <th className={table.th}>Desde</th>
+                    <th className={table.th} />
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className={table.tbody}>
                   {employees.data.data.map((e) => {
                     const isSelf = e.id === user?.id;
+                    const s = schedule(e.workScheduleId);
                     return (
-                      <tr key={e.id} className={cn(!e.active && 'text-slate-400')}>
-                        <td className="px-4 py-3">
-                          <p className="font-medium text-slate-900">
-                            {e.name} {isSelf && <span className="font-normal text-slate-400">(você)</span>}
-                          </p>
-                          <p className="text-xs text-slate-500">{e.email}</p>
+                      <tr key={e.id} className={cn(table.tr, !e.active && 'opacity-50')}>
+                        <td className={table.td}>
+                          <div className="flex items-center gap-3">
+                            <Avatar name={e.name} />
+                            <div className="min-w-0">
+                              <p className="font-medium text-white">
+                                {e.name}
+                                {isSelf && <span className="ml-1.5 font-normal text-slate-500">(você)</span>}
+                              </p>
+                              <p className="truncate text-xs text-slate-500">{e.email}</p>
+                            </div>
+                          </div>
                         </td>
-                        <td className="px-4 py-3">
-                          <Badge tone={e.role === 'ADMIN' ? 'indigo' : 'gray'}>
+                        <td className={table.td}>
+                          <Badge tone={e.role === 'ADMIN' ? 'brand' : 'gray'}>
                             {e.role === 'ADMIN' ? 'Admin' : 'Funcionário'}
                           </Badge>
                         </td>
-                        <td className="px-4 py-3">
-                          {scheduleName(e.workScheduleId) ?? <span className="text-amber-600">Sem jornada</span>}
+                        <td className={table.td}>
+                          {s ? (
+                            <div>
+                              <p className="text-slate-200">{s.name}</p>
+                              <p className="text-xs text-slate-500">
+                                {formatDuration(s.dailyMinutes)} · {s.startTime}
+                              </p>
+                            </div>
+                          ) : e.workScheduleId ? (
+                            <span className="text-slate-500">…</span>
+                          ) : (
+                            <Badge tone="amber">Sem jornada</Badge>
+                          )}
                         </td>
-                        <td className="px-4 py-3">
-                          {e.active ? <Badge tone="green">Ativo</Badge> : <Badge tone="red">Inativo</Badge>}
+                        <td className={table.td}>
+                          {e.active ? (
+                            <Badge tone="green" dot>
+                              Ativo
+                            </Badge>
+                          ) : (
+                            <Badge tone="red" dot>
+                              Inativo
+                            </Badge>
+                          )}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap tabular-nums">
+                        <td className={cn(table.td, 'whitespace-nowrap text-slate-400 tabular-nums')}>
                           {formatDate(e.createdAt.slice(0, 10))}
                         </td>
-                        <td className="px-4 py-3">
-                          <div className="flex justify-end gap-1 whitespace-nowrap">
+                        <td className={table.td}>
+                          <div className="flex items-center justify-end gap-0.5">
                             <Link
-                              to={`/espelho?funcionario=${e.id}`}
-                              className="rounded-md px-2.5 py-1.5 text-sm font-medium text-indigo-600 hover:bg-indigo-50"
+                              to={`/registros?funcionario=${e.id}`}
+                              title="Ver registros"
+                              aria-label="Ver registros"
+                              className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-brand-500/10 hover:text-brand-300"
                             >
-                              Espelho
+                              <CalendarDays className="size-4" />
                             </Link>
-                            <Button size="sm" variant="ghost" onClick={() => setEditing(e)}>
-                              Editar
-                            </Button>
-                            <Button size="sm" variant="ghost" onClick={() => setResetting(e)}>
-                              Senha
-                            </Button>
+                            <IconAction label="Editar" icon={Pencil} onClick={() => setEditing(e)} />
+                            <IconAction label="Redefinir senha" icon={KeyRound} onClick={() => setResetting(e)} />
                             {!isSelf && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className={e.active ? 'text-red-600 hover:bg-red-50 hover:text-red-700' : ''}
+                              <IconAction
+                                label={e.active ? 'Desativar acesso' : 'Reativar acesso'}
+                                icon={Power}
+                                danger={e.active}
                                 onClick={() => toggleActive(e)}
                                 disabled={setActive.isPending && setActive.variables?.id === e.id}
-                              >
-                                {e.active ? 'Desativar' : 'Reativar'}
-                              </Button>
+                              />
                             )}
                           </div>
                         </td>

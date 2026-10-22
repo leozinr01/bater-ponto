@@ -1,9 +1,10 @@
+import { CalendarPlus, PencilLine } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { errorMessage } from '../lib/api';
 import { dateOf, formatDate, timeOf, today, zonedIso } from '../lib/format';
 import { useManualPunch, useReplacePunch, useVoidPunch } from '../lib/queries';
 import { useToast } from './toast';
-import { Alert, Button, cn, Field, Input, Modal, Textarea } from './ui';
+import { Alert, Button, Field, Input, Modal, Segmented, Textarea } from './ui';
 
 const REASON_HINT = 'Obrigatória (mínimo de 5 caracteres). Fica registrada junto com a correção.';
 
@@ -92,6 +93,7 @@ export function AddPunchModal({
       open={open}
       onClose={onClose}
       title="Incluir marcação"
+      icon={CalendarPlus}
       description={`Inclui uma marcação faltante para ${employeeName}.`}
       footer={
         <>
@@ -162,6 +164,7 @@ export function EditPunchModal({
       open={open}
       onClose={onClose}
       title={`Marcação das ${original}`}
+      icon={PencilLine}
       description={`${employeeName}. A marcação original é mantida no histórico.`}
       footer={
         <>
@@ -180,26 +183,15 @@ export function EditPunchModal({
       }
     >
       <form id="edit-punch" onSubmit={onSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1 text-sm font-medium">
-          {(
-            [
-              ['replace', 'Trocar horário'],
-              ['void', 'Desconsiderar'],
-            ] as const
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setMode(value)}
-              className={cn(
-                'rounded-md px-3 py-1.5 transition-colors',
-                mode === value ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900',
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          className="flex w-full"
+          value={mode}
+          onChange={setMode}
+          options={[
+            { value: 'replace', label: 'Trocar horário' },
+            { value: 'void', label: 'Desconsiderar' },
+          ]}
+        />
         {mutation.isError && <Alert>{errorMessage(mutation.error)}</Alert>}
         {mode === 'replace' ? (
           <DateTimeFields date={date} time={time} onDate={setDate} onTime={setTime} timezone={timezone} />

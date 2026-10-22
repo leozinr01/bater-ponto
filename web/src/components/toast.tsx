@@ -26,16 +26,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div
         aria-live="polite"
-        className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex flex-col items-center gap-2 px-4 sm:items-end sm:pr-6"
+        className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-50 lg:bottom-4 flex flex-col items-center gap-2 px-4 sm:items-end sm:pr-6"
       >
         {toasts.map((t) => (
           <div
             key={t.id}
             className={cn(
               'pointer-events-auto w-full max-w-sm rounded-lg px-4 py-3 text-sm whitespace-pre-line shadow-lg ring-1',
+              'animate-fade-in backdrop-blur',
               t.tone === 'success'
-                ? 'bg-slate-900 text-white ring-slate-900'
-                : 'bg-red-600 text-white ring-red-700',
+                ? 'bg-ink-700/95 text-white ring-white/10'
+                : 'bg-red-500/95 text-white ring-red-400/50',
             )}
           >
             {t.message}
