@@ -59,3 +59,7 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 # Build incremental do TypeScript
 *.tsbuildinfo
+
+.vercel
+.env*
+!.env.example

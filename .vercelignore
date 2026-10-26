@@ -1,0 +1,15 @@
+# Nunca enviar segredos no upload para a Vercel (as variáveis ficam no painel do projeto)
+.env
+.env.*
+!.env.example
+web/.env
+web/.env.*
+!web/.env.example
+
+# Gerados no build da própria Vercel
+node_modules
+web/node_modules
+dist
+web/dist
+coverage
+*.log

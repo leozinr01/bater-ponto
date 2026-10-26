@@ -2,6 +2,8 @@ generator client {
   provider        = "prisma-client-js"
   // Driver `pg` no lugar do motor nativo: uma ida e volta por consulta no pooler do Supabase
   previewFeatures = ["driverAdapters"]
+  // native: este PC; rhel-openssl-3.0.x: funções da Vercel (Linux)
+  binaryTargets   = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
