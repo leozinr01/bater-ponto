@@ -14,6 +14,8 @@ import { addDays, localDate, weekday, zonedInstant } from '@/common/time';
  * - Jornadas com número ímpar de marcações ficam "incomplete": nenhum horário é
  *   inventado, só os pares completos contam como trabalhados, e extra/falta não é
  *   calculado até que a marcação faltante seja corrigida.
+ * - Cada dia usa a jornada vigente naquela data (histórico): mudar a jornada não altera
+ *   o cálculo dos dias anteriores.
  * - Feriado ou abono (atestado, férias, afastamento) num dia de trabalho: não há horas
  *   previstas nem falta; o que for trabalhado conta como extra.
  * - Alertas (CLT) só são avaliados em jornadas completas: intervalo intrajornada
@@ -37,6 +39,12 @@ export interface ScheduleInput {
   workDays: number[];
   lateToleranceMinutes: number;
   overtimeToleranceMinutes: number;
+}
+
+/** Jornada vigente a partir de uma data (null = sem jornada). */
+export interface ScheduleSegment {
+  from: string;
+  schedule: ScheduleInput | null;
 }
 
 export interface WorkPeriod {
@@ -99,7 +107,10 @@ export interface TimesheetTotals {
 
 export interface BuildTimesheetInput {
   punches: PunchInput[];
+  /** Jornada atual: usada quando não há histórico. */
   schedule: ScheduleInput | null;
+  /** Histórico em ordem cronológica; cada dia usa o último trecho iniciado até ele. */
+  scheduleHistory?: ScheduleSegment[];
   timezone: string;
   /** Período inclusivo, datas locais YYYY-MM-DD. */
   from: string;
@@ -169,6 +180,21 @@ function rawLateMinutes(
         : best,
     );
   return Math.max(0, minutesBetween(expectedStart, firstPunch));
+}
+
+/** Jornada vigente na data. */
+export function scheduleAt(
+  input: Pick<BuildTimesheetInput, 'schedule' | 'scheduleHistory'>,
+  date: string,
+): ScheduleInput | null {
+  const history = input.scheduleHistory;
+  if (!history?.length) return input.schedule;
+  let current = history[0];
+  for (const segment of history) {
+    if (segment.from > date) break;
+    current = segment;
+  }
+  return current.schedule;
 }
 
 function isWorkDay(schedule: ScheduleInput | null, date: string) {
@@ -283,7 +309,7 @@ export function buildTimesheet(input: BuildTimesheetInput): {
   days: TimesheetDay[];
   totals: TimesheetTotals;
 } {
-  const { punches, schedule, timezone, from, to, now, employeeSince } = input;
+  const { punches, timezone, from, to, now, employeeSince } = input;
   const today = localDate(now, timezone);
 
   const shiftsByDate = new Map<string, PunchInput[][]>();
@@ -307,10 +333,18 @@ export function buildTimesheet(input: BuildTimesheetInput): {
     const shifts = shiftsByDate.get(date);
     if (shifts) {
       days.push(
-        buildDay(date, shifts, schedule, input, restBefore.get(date) ?? null),
+        buildDay(
+          date,
+          shifts,
+          scheduleAt(input, date),
+          input,
+          restBefore.get(date) ?? null,
+        ),
       );
       continue;
     }
+
+    const schedule = scheduleAt(input, date);
 
     const holiday = input.holidays?.get(date) ?? null;
     const absence = input.absences?.get(date) ?? null;
@@ -365,7 +399,10 @@ export function buildTimesheet(input: BuildTimesheetInput): {
       incompleteDays: days.filter((d) => d.status === 'incomplete').length,
       absentDays: days.filter((d) => d.status === 'absent').length,
       excusedDays: days.filter(
-        (d) => d.absence && !d.holiday && isWorkDay(schedule, d.date),
+        (d) =>
+          d.absence &&
+          !d.holiday &&
+          isWorkDay(scheduleAt(input, d.date), d.date),
       ).length,
       alertDays: days.filter((d) => d.alerts.length > 0).length,
     },

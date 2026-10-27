@@ -1,6 +1,9 @@
 import { hashPassword } from '@/auth/auth.service';
 import { paginated, toPrismaPage } from '@/common/pagination';
+import { localDate } from '@/common/time';
 import { PrismaService } from '@/infra/database/prisma.service';
+import { EnvService } from '@/infra/env/env.service';
+import { baselineRow, recordSchedule } from '@/work-schedules/schedule-history';
 import {
   BadRequestException,
   ConflictException,
@@ -17,21 +20,31 @@ import {
 
 @Injectable()
 export class EmployeesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private env: EnvService,
+  ) {}
 
   async create(dto: CreateEmployeeDto) {
     await this.ensureEmailAvailable(dto.email);
-    if (dto.workScheduleId) await this.ensureScheduleExists(dto.workScheduleId);
+    const schedule = dto.workScheduleId
+      ? await this.ensureScheduleExists(dto.workScheduleId)
+      : null;
+    const password = await hashPassword(dto.password);
 
-    return this.prisma.user.create({
-      data: {
-        name: dto.name,
-        email: dto.email,
-        role: dto.role ?? 'EMPLOYEE',
-        workScheduleId: dto.workScheduleId,
-        password: await hashPassword(dto.password),
-      },
-      select: employeeSelect,
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          name: dto.name,
+          email: dto.email,
+          role: dto.role ?? 'EMPLOYEE',
+          workScheduleId: dto.workScheduleId,
+          password,
+        },
+        select: employeeSelect,
+      });
+      await tx.scheduleHistory.create({ data: baselineRow(user.id, schedule) });
+      return user;
     });
   }
 
@@ -81,18 +94,40 @@ export class EmployeesService {
     if (dto.email && dto.email !== current.email) {
       await this.ensureEmailAvailable(dto.email);
     }
-    if (dto.workScheduleId) await this.ensureScheduleExists(dto.workScheduleId);
+    const next = dto.workScheduleId
+      ? await this.ensureScheduleExists(dto.workScheduleId)
+      : null;
+    const scheduleChanged =
+      dto.workScheduleId !== undefined &&
+      dto.workScheduleId !== current.workScheduleId;
 
-    return this.prisma.user.update({
-      where: { id },
-      data: {
-        name: dto.name,
-        email: dto.email,
-        role: dto.role,
-        active: dto.active,
-        workScheduleId: dto.workScheduleId,
-      },
-      select: employeeSelect,
+    return this.prisma.$transaction(async (tx) => {
+      if (scheduleChanged) {
+        // A troca vale a partir de hoje: os dias anteriores mantêm a jornada da época
+        const previous = current.workScheduleId
+          ? await tx.workSchedule.findUnique({
+              where: { id: current.workScheduleId },
+            })
+          : null;
+        await recordSchedule(
+          tx,
+          id,
+          previous,
+          next,
+          localDate(new Date(), this.env.get('APP_TIMEZONE')),
+        );
+      }
+      return tx.user.update({
+        where: { id },
+        data: {
+          name: dto.name,
+          email: dto.email,
+          role: dto.role,
+          active: dto.active,
+          workScheduleId: dto.workScheduleId,
+        },
+        select: employeeSelect,
+      });
     });
   }
 
@@ -119,5 +154,6 @@ export class EmployeesService {
     });
     if (!schedule)
       throw new BadRequestException('Jornada de trabalho não encontrada');
+    return schedule;
   }
 }

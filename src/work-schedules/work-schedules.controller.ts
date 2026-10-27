@@ -61,7 +61,7 @@ export class WorkSchedulesController {
   @ApiOperation({
     summary: 'Atualiza uma jornada',
     description:
-      'O espelho de ponto é sempre calculado com a jornada atual do funcionário, inclusive para períodos passados.',
+      'A alteração vale a partir de hoje para os funcionários que usam a jornada: os dias anteriores continuam calculados com os valores antigos.',
   })
   @ApiOkResponse({ type: WorkScheduleResponseDto })
   update(

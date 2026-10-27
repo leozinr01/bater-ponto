@@ -30,13 +30,14 @@ model User {
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime? @updatedAt @map("updated_at")
 
-  workSchedule     WorkSchedule? @relation(fields: [workScheduleId], references: [id])
-  punchClocks      PunchClock[]  @relation("PunchOwner")
-  createdPunches   PunchClock[]  @relation("PunchCreatedBy")
-  voidedPunches    PunchClock[]  @relation("PunchVoidedBy")
-  absences         Absence[]     @relation("AbsenceOwner")
-  createdAbsences  Absence[]     @relation("AbsenceCreatedBy")
-  canceledAbsences Absence[]     @relation("AbsenceCanceledBy")
+  workSchedule     WorkSchedule?     @relation(fields: [workScheduleId], references: [id])
+  punchClocks      PunchClock[]      @relation("PunchOwner")
+  createdPunches   PunchClock[]      @relation("PunchCreatedBy")
+  voidedPunches    PunchClock[]      @relation("PunchVoidedBy")
+  absences         Absence[]         @relation("AbsenceOwner")
+  createdAbsences  Absence[]         @relation("AbsenceCreatedBy")
+  canceledAbsences Absence[]         @relation("AbsenceCanceledBy")
+  scheduleHistory  ScheduleHistory[]
 
   @@map("users")
 }
@@ -58,9 +59,35 @@ model WorkSchedule {
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime? @updatedAt @map("updated_at")
 
-  users User[]
+  users   User[]
+  history ScheduleHistory[]
 
   @@map("work_schedules")
+}
+
+/// Jornada vigente de um funcionário a partir de uma data, com cópia dos valores da época:
+/// trocar a jornada ou editá-la não muda o cálculo dos dias anteriores.
+/// Sem workScheduleId (e campos nulos) = sem jornada a partir dessa data.
+model ScheduleHistory {
+  id             String  @id @default(uuid())
+  userId         String  @map("user_id")
+  /// Data local (YYYY-MM-DD) a partir da qual vale.
+  effectiveFrom  String  @map("effective_from")
+  workScheduleId String? @map("work_schedule_id")
+
+  startTime                String? @map("start_time")
+  dailyMinutes             Int?    @map("daily_minutes")
+  workDays                 Int[]   @map("work_days")
+  lateToleranceMinutes     Int?    @map("late_tolerance_minutes")
+  overtimeToleranceMinutes Int?    @map("overtime_tolerance_minutes")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user         User          @relation(fields: [userId], references: [id])
+  workSchedule WorkSchedule? @relation(fields: [workScheduleId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, effectiveFrom])
+  @@map("schedule_history")
 }
 
 /// Feriado da empresa: num dia de trabalho, não gera falta e todo o tempo trabalhado conta como extra.

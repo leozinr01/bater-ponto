@@ -27,7 +27,7 @@ Controle de ponto da TAI Project: o funcionário bate o ponto pelo app (PWA inst
 - **Feriados:** cadastro por ano e importação dos feriados nacionais (incluindo a Paixão de Cristo, que muda todo ano). Em dia de trabalho, feriado não gera falta e o tempo trabalhado conta como extra.
 - **Alertas da CLT** nos registros e no relatório: intervalo abaixo do mínimo (art. 71), mais de 2h extras no dia (art. 59) e menos de 11h de descanso entre jornadas (art. 66).
 - **Funcionários:** cadastro, perfil, jornada, redefinição de senha e desativação (ninguém é excluído).
-- **Jornadas:** entrada prevista, carga diária, dias de trabalho e tolerâncias.
+- **Jornadas:** entrada prevista, carga diária, dias de trabalho e tolerâncias. Mudanças (na jornada ou na de um funcionário) valem a partir do dia em que são feitas: os meses anteriores não são recalculados.
 - **Correções** direto nos Registros de outro funcionário: incluir marcação faltante, trocar horário ou desconsiderar, sempre com justificativa.
 - **Abonos:** atestado, férias, afastamento ou abono de dias inteiros, lançados nos Registros (inclusive direto de um dia marcado como falta). Os dias de trabalho cobertos não geram falta nem horas previstas. Cancelar não apaga: o lançamento fica no histórico.
 

@@ -54,7 +54,7 @@ Itens que, pelo que conhecemos da Portaria 671, são exigidos de um REP-P e prec
 | Descanso semanal remunerado, feriados nacionais/locais | Lei 605/1949 | Feriados cadastrados (com importação dos nacionais) não geram falta, e o trabalho neles conta como extra. Feriados estaduais e municipais precisam ser cadastrados à mão. DSR não é calculado |
 | Férias, atestados, afastamentos, abonos | CLT e normas diversas | Lançamento de dias inteiros com justificativa e histórico de cancelamento. Não há abono de horas parciais (ex.: atestado de 2h), controle de período aquisitivo de férias nem integração com folha |
 | Escalas (12x36, revezamento), jornadas diferentes por dia da semana | CLT art. 59-A e acordos | A jornada tem um único horário e carga para todos os dias de trabalho |
-| Histórico de jornada | — | O espelho usa a jornada **atual** do funcionário, inclusive para períodos passados. Mudar uma jornada altera o cálculo retroativo |
+| Histórico de jornada | — | Trocar a jornada de um funcionário ou editar uma jornada vale a partir do dia da mudança; os dias anteriores mantêm os valores da época. Não há agendamento de mudança com data futura nem correção retroativa pela tela |
 | Convenção coletiva da categoria | — | Pode trazer tolerâncias, adicionais e regras próprias que precisam ser parametrizadas |
 
 ## LGPD e segurança
@@ -67,6 +67,6 @@ Itens que, pelo que conhecemos da Portaria 671, são exigidos de um REP-P e prec
 
 1. Decidir a modalidade (REP-P ou REP-A) com o jurídico e verificar a convenção coletiva aplicável.
 2. Modelar empresa/estabelecimento e CPF do trabalhador; adicionar NSR.
-3. Implementar histórico de jornada e abono de horas parciais (correções de cálculo com maior impacto prático).
+3. Implementar abono de horas parciais e banco de horas (correções de cálculo com maior impacto prático).
 4. Implementar adicional noturno/hora reduzida e o cálculo do adicional de horas extras.
 5. Se for REP-P: comprovante assinado, AFD/AEJ no leiaute oficial com assinatura ICP-Brasil, registro no INPI e atestado técnico.

@@ -12,6 +12,7 @@ import {
 } from '@/common/time';
 import { PrismaService } from '@/infra/database/prisma.service';
 import { EnvService } from '@/infra/env/env.service';
+import { loadScheduleHistory } from '@/work-schedules/schedule-history';
 import {
   BadRequestException,
   ConflictException,
@@ -32,6 +33,7 @@ import {
   MAX_BREAK_MINUTES,
   DayAbsence,
   MAX_WORK_PERIOD_MINUTES,
+  ScheduleSegment,
   TimesheetDay,
 } from './timesheet';
 
@@ -165,10 +167,11 @@ export class PunchesService {
     });
     if (!employee) throw new NotFoundException('Funcionário não encontrado');
 
-    const [punches, holidays, absences] = await Promise.all([
+    const [punches, holidays, absences, history] = await Promise.all([
       this.validPunchesInWindow([employeeId], query.from, query.to),
       this.holidays.byDate(query.from, query.to),
       this.absences.byEmployeeAndDate([employeeId], query.from, query.to),
+      loadScheduleHistory(this.prisma, [employeeId]),
     ]);
     return this.buildEmployeeTimesheet(
       employee,
@@ -177,6 +180,7 @@ export class PunchesService {
       query.to,
       holidays,
       absences.get(employeeId),
+      history.get(employeeId),
     );
   }
 
@@ -197,10 +201,11 @@ export class PunchesService {
     ]);
 
     const ids = employees.map((e) => e.id);
-    const [punches, holidays, absences] = await Promise.all([
+    const [punches, holidays, absences, history] = await Promise.all([
       this.validPunchesInWindow(ids, query.from, query.to),
       this.holidays.byDate(query.from, query.to),
       this.absences.byEmployeeAndDate(ids, query.from, query.to),
+      loadScheduleHistory(this.prisma, ids),
     ]);
 
     const data = employees.map((employee) => {
@@ -211,6 +216,7 @@ export class PunchesService {
         query.to,
         holidays,
         absences.get(employee.id),
+        history.get(employee.id),
       );
       return { employee: sheet.employee, totals: sheet.totals };
     });
@@ -417,11 +423,13 @@ export class PunchesService {
     to: string,
     holidays: Map<string, string>,
     absences?: Map<string, DayAbsence>,
+    scheduleHistory?: ScheduleSegment[],
   ) {
     const schedule = employee.workSchedule;
     const { days, totals } = buildTimesheet({
       punches,
       schedule,
+      scheduleHistory,
       timezone: this.tz,
       from,
       to,

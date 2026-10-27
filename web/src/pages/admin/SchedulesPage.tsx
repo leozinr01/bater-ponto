@@ -66,7 +66,8 @@ function ScheduleFormModal({ schedule, onClose }: { schedule: WorkSchedule | nul
         {save.isError && <Alert>{errorMessage(save.error)}</Alert>}
         {schedule && (
           <Alert tone="info">
-            Os registros sempre usam a jornada atual, inclusive nos meses passados de quem a utiliza.
+            A alteração vale a partir de hoje para quem usa esta jornada. Os dias anteriores continuam calculados com os
+            valores antigos.
           </Alert>
         )}
         <Field label="Nome">

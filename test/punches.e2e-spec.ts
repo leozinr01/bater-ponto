@@ -555,7 +555,16 @@ describe('Ponto (e2e)', () => {
       expect(addOwn.status).toBe(403);
     });
 
-    it('a configuração da jornada altera os cálculos', async () => {
+    it('mudanças de jornada valem a partir de hoje e não alteram o passado', async () => {
+      const today = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+      }).format(new Date());
+      const history = () =>
+        ctx.prisma.scheduleHistory.findMany({
+          where: { userId: employee.id },
+          orderBy: { effectiveFrom: 'asc' },
+        });
+
       await ctx
         .http()
         .patch(`/api/work-schedules/${scheduleId}`)
@@ -563,21 +572,43 @@ describe('Ponto (e2e)', () => {
         .send({ dailyMinutes: 420, lateToleranceMinutes: 30 })
         .expect(200);
 
+      // O passado continua com a jornada da época: ter = 1h extra e 30 min de atraso
       const sheet = await timesheet();
-      // ter: 7h30 com jornada de 7h → 30 min extra; atraso de 30 min agora dentro da tolerância
       expect(dayOf(sheet.body, '2026-10-06')).toMatchObject({
+        expectedMinutes: 480,
+        overtimeMinutes: 60,
+        lateMinutes: 30,
+      });
+      expect(
+        (await history()).map((h) => [h.effectiveFrom, h.dailyMinutes]),
+      ).toEqual([
+        ['1970-01-01', 480],
+        [today, 420],
+      ]);
+
+      // Simula que a mudança vale desde a terça: só os dias a partir dela mudam
+      await ctx.prisma.scheduleHistory.updateMany({
+        where: { userId: employee.id, effectiveFrom: today },
+        data: { effectiveFrom: '2026-10-06' },
+      });
+      const changed = await timesheet();
+      expect(dayOf(changed.body, '2026-10-05')).toMatchObject({
+        expectedMinutes: 480,
+      });
+      // ter: 7h30 com jornada de 7h → 30 min extra; atraso de 30 min agora dentro da tolerância
+      expect(dayOf(changed.body, '2026-10-06')).toMatchObject({
         expectedMinutes: 420,
         overtimeMinutes: 30,
         deficitMinutes: 0,
         lateMinutes: 0,
       });
       // qua: 7h noturnas = jornada cheia
-      expect(dayOf(sheet.body, '2026-10-07')).toMatchObject({
+      expect(dayOf(changed.body, '2026-10-07')).toMatchObject({
         overtimeMinutes: 0,
         deficitMinutes: 0,
       });
 
-      // sem jornada, não há base para extra/falta/atraso
+      // Tirar a jornada também vale só daí em diante
       await ctx
         .http()
         .patch(`/api/employees/${employee.id}`)
@@ -586,11 +617,18 @@ describe('Ponto (e2e)', () => {
         .expect(200);
       const withoutSchedule = await timesheet();
       expect(withoutSchedule.body.schedule).toBeNull();
-      expect(withoutSchedule.body.totals).toMatchObject({
-        expectedMinutes: null,
-        overtimeMinutes: null,
-        lateMinutes: null,
-        absentDays: 0,
+      expect(withoutSchedule.body.totals.absentDays).toBe(1);
+
+      // Sem jornada desde a quinta: a falta de quinta deixa de existir
+      await ctx.prisma.scheduleHistory.updateMany({
+        where: { userId: employee.id, effectiveFrom: today },
+        data: { effectiveFrom: '2026-10-08' },
+      });
+      const fromThursday = await timesheet();
+      expect(dayOf(fromThursday.body, '2026-10-08')).toBeUndefined();
+      expect(fromThursday.body.totals.absentDays).toBe(0);
+      expect(dayOf(fromThursday.body, '2026-10-05')).toMatchObject({
+        expectedMinutes: 480,
       });
     });
   });

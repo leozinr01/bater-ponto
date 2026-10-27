@@ -479,3 +479,56 @@ describe('abonos', () => {
     expect(totals.excusedDays).toBe(1);
   });
 });
+
+describe('histórico de jornada', () => {
+  const partTime: ScheduleInput = {
+    ...schedule,
+    startTime: '13:00',
+    dailyMinutes: 240,
+  };
+  const history = [
+    { from: '1970-01-01', schedule },
+    { from: '2026-10-21', schedule: partTime },
+  ];
+  const day = (date: string) => [
+    p(`${date}T08:00`),
+    p(`${date}T12:00`),
+    p(`${date}T13:00`),
+    p(`${date}T17:00`),
+  ];
+
+  it('calcula cada dia com a jornada vigente naquela data', () => {
+    const { days } = build([...day('2026-10-20'), ...day('2026-10-21')], {
+      from: '2026-10-20',
+      to: '2026-10-21',
+      scheduleHistory: history,
+      schedule: partTime, // atual
+    });
+    expect(days[0]).toMatchObject({
+      expectedMinutes: 480,
+      overtimeMinutes: 0,
+      lateMinutes: 0,
+    });
+    // a partir de 21: 4h previstas e entrada às 13:00
+    expect(days[1]).toMatchObject({
+      expectedMinutes: 240,
+      overtimeMinutes: 240,
+      lateMinutes: 0,
+    });
+  });
+
+  it('dia sem jornada no histórico não gera falta', () => {
+    const { days, totals } = build([], {
+      from: '2026-10-19',
+      to: '2026-10-20',
+      scheduleHistory: [
+        { from: '1970-01-01', schedule: null },
+        { from: '2026-10-20', schedule },
+      ],
+    });
+    expect(days.map((d) => [d.date, d.status])).toEqual([
+      ['2026-10-20', 'absent'],
+    ]);
+    expect(totals.absentDays).toBe(1);
+  });
+});
