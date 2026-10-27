@@ -8,8 +8,10 @@ import { ClockPage } from './pages/ClockPage';
 import { LoginPage } from './pages/LoginPage';
 import { RecordsPage } from './pages/RecordsPage';
 import { EmployeesPage } from './pages/admin/EmployeesPage';
+import { HolidaysPage } from './pages/admin/HolidaysPage';
 import { ReportPage } from './pages/admin/ReportPage';
 import { SchedulesPage } from './pages/admin/SchedulesPage';
+import { TodayPage } from './pages/admin/TodayPage';
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
@@ -61,10 +63,12 @@ export function App() {
           element={
             <RequireAdmin>
               <Routes>
+                <Route path="hoje" element={<TodayPage />} />
                 <Route path="relatorio" element={<ReportPage />} />
                 <Route path="funcionarios" element={<EmployeesPage />} />
                 <Route path="jornadas" element={<SchedulesPage />} />
-                <Route path="*" element={<Navigate to="relatorio" replace />} />
+                <Route path="feriados" element={<HolidaysPage />} />
+                <Route path="*" element={<Navigate to="hoje" replace />} />
               </Routes>
             </RequireAdmin>
           }

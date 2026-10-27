@@ -2,8 +2,8 @@ import { CalendarCheck, Plus } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { AddPunchModal, EditPunchModal } from '../../components/corrections';
 import { PeriodPairs, type PunchRef } from '../../components/DayPeriods';
-import { Balance, DayStatusBadge } from '../../components/timesheet';
-import { Alert, Card, cn, EmptyState, Loading, Segmented } from '../../components/ui';
+import { alertLabels, Balance, DayAlerts, DayStatusBadge } from '../../components/timesheet';
+import { Alert, Badge, Card, cn, EmptyState, Loading, Segmented } from '../../components/ui';
 import { WeekStrip } from '../../components/WeekStrip';
 import { errorMessage } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
@@ -11,7 +11,7 @@ import { currentMonth, formatDate, formatMinutes, monthRange, timeOf, today, WEE
 import { useTimesheet } from '../../lib/queries';
 import type { TimesheetDay } from '../../lib/types';
 
-type Filter = 'all' | 'pending' | 'absent';
+type Filter = 'all' | 'pending' | 'absent' | 'alerts';
 
 const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
@@ -33,7 +33,7 @@ function groupByWeek(days: TimesheetDay[]) {
   return weeks;
 }
 
-const isOff = (d: TimesheetDay) => !d.scheduled && d.punches.length === 0;
+const isOff = (d: TimesheetDay) => !d.scheduled && !d.holiday && d.punches.length === 0;
 
 function SummaryItem({ label, value, hint }: { label: string; value: ReactNode; hint?: string }) {
   return (
@@ -81,9 +81,16 @@ function DayRow({
 
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1.5">
         {day.periods.length > 0 && <PeriodPairs day={day} onEdit={canCorrect ? onEdit : undefined} />}
+        {day.holiday && day.punches.length > 0 && (
+          <span title={day.holiday}>
+            <Badge tone="brand">Feriado</Badge>
+          </span>
+        )}
+        <DayAlerts alerts={day.alerts} />
         {showStatus && (
           <span className="flex items-center gap-2">
             <DayStatusBadge day={day} />
+            {day.holiday && !day.punches.length && <span className="text-[11px] text-slate-400">{day.holiday}</span>}
             {day.lateMinutes ? <span className="text-[11px] text-amber-300">Atraso {formatMinutes(day.lateMinutes)}</span> : null}
           </span>
         )}
@@ -146,7 +153,8 @@ function PrintTable({ days }: { days: TimesheetDay[] }) {
               <Balance overtime={d.overtimeMinutes} deficit={d.deficitMinutes} />
             </td>
             <td className="py-1">
-              <DayStatusBadge day={d} />
+              {d.holiday ? `Feriado: ${d.holiday}` : <DayStatusBadge day={d} />}
+              {d.alerts.length > 0 && ` · ${d.alerts.map((a) => alertLabels[a].label).join(', ')}`}
             </td>
           </tr>
         ))}
@@ -172,7 +180,13 @@ export function DaysView({ employeeId, month }: { employeeId: string; month: str
   const todayDate = today(data.timezone);
   const totals = data.totals;
   const matches = (d: TimesheetDay) =>
-    filter === 'pending' ? d.status === 'incomplete' : filter === 'absent' ? d.status === 'absent' : !isOff(d);
+    filter === 'pending'
+      ? d.status === 'incomplete'
+      : filter === 'absent'
+        ? d.status === 'absent'
+        : filter === 'alerts'
+          ? d.alerts.length > 0
+          : !isOff(d);
   // Semanas da mais recente para a mais antiga; dentro da semana, o dia mais recente primeiro
   const weeks = groupByWeek(data.days)
     .map((week) => ({ all: week, visible: week.filter(matches).reverse() }))
@@ -227,6 +241,7 @@ export function DaysView({ employeeId, month }: { employeeId: string; month: str
               { value: 'all', label: 'Todos' },
               { value: 'pending', label: `Pendências${totals.incompleteDays ? ` · ${totals.incompleteDays}` : ''}` },
               { value: 'absent', label: `Faltas${totals.absentDays ? ` · ${totals.absentDays}` : ''}` },
+              { value: 'alerts', label: `Alertas${totals.alertDays ? ` · ${totals.alertDays}` : ''}` },
             ]}
           />
         </div>
@@ -238,7 +253,9 @@ export function DaysView({ employeeId, month }: { employeeId: string; month: str
                 ? 'Nenhum dia com marcação faltando. Tudo certo!'
                 : filter === 'absent'
                   ? 'Nenhuma falta no mês.'
-                  : 'Nenhum dia de trabalho neste mês ainda.'}
+                  : filter === 'alerts'
+                    ? 'Nenhum alerta de intervalo, horas extras ou descanso no mês.'
+                    : 'Nenhum dia de trabalho neste mês ainda.'}
             </EmptyState>
           </Card>
         ) : (

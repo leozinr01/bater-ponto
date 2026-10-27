@@ -204,8 +204,12 @@ class TimesheetPeriodDto {
 class TimesheetDayDto {
   @ApiProperty({ example: '2026-10-20' }) date: string;
   @ApiProperty({ description: '0 = domingo ... 6 = sábado' }) weekday: number;
-  @ApiProperty({ description: 'Dia de trabalho pela jornada' })
+  @ApiProperty({
+    description: 'Dia de trabalho pela jornada (falso em feriados)',
+  })
   scheduled: boolean;
+  @ApiProperty({ nullable: true, type: String, description: 'Nome do feriado' })
+  holiday: string | null;
   @ApiProperty({
     enum: ['complete', 'incomplete', 'in_progress', 'absent'],
     description:
@@ -220,6 +224,13 @@ class TimesheetDayDto {
   @ApiProperty({ nullable: true, type: Number }) lateMinutes: number | null;
   @ApiProperty({ nullable: true, type: Number }) overtimeMinutes: number | null;
   @ApiProperty({ nullable: true, type: Number }) deficitMinutes: number | null;
+  @ApiProperty({
+    enum: ['short_break', 'overtime_limit', 'short_rest'],
+    isArray: true,
+    description:
+      'Alertas da CLT: intervalo abaixo do mínimo (art. 71), mais de 2h extras (art. 59), menos de 11h de descanso (art. 66)',
+  })
+  alerts: string[];
 }
 
 class TimesheetTotalsDto {
@@ -230,6 +241,8 @@ class TimesheetTotalsDto {
   @ApiProperty({ nullable: true, type: Number }) deficitMinutes: number | null;
   @ApiProperty() incompleteDays: number;
   @ApiProperty() absentDays: number;
+  @ApiProperty({ description: 'Dias com pelo menos um alerta' })
+  alertDays: number;
 }
 
 class TimesheetEmployeeDto {
@@ -251,4 +264,52 @@ export class TimesheetResponseDto {
 export class ReportItemDto {
   @ApiProperty({ type: TimesheetEmployeeDto }) employee: TimesheetEmployeeDto;
   @ApiProperty({ type: TimesheetTotalsDto }) totals: TimesheetTotalsDto;
+}
+
+const PRESENCE_ENUM = [
+  'working',
+  'on_break',
+  'finished',
+  'late',
+  'not_started',
+  'day_off',
+];
+
+class TodayEmployeeDto {
+  @ApiProperty({ type: TimesheetEmployeeDto }) employee: TimesheetEmployeeDto;
+  @ApiProperty({ nullable: true, type: String }) scheduleName: string | null;
+  @ApiProperty({ nullable: true, type: String, example: '08:00' })
+  expectedStart: string | null;
+  @ApiProperty({ nullable: true, type: Number }) expectedMinutes: number | null;
+  @ApiProperty({ enum: PRESENCE_ENUM }) status: string;
+  @ApiProperty({ nullable: true, type: String }) firstPunch: string | null;
+  @ApiProperty({ nullable: true, type: String }) lastPunch: string | null;
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    description: 'Início do período em aberto',
+  })
+  workingSince: string | null;
+  @ApiProperty({ description: 'Minutos dos períodos já fechados' })
+  workedMinutes: number;
+  @ApiProperty({ nullable: true, type: Number }) lateMinutes: number | null;
+}
+
+export class TodayResponseDto {
+  @ApiProperty({ example: '2026-10-27' }) date: string;
+  @ApiProperty({ example: 'America/Sao_Paulo' }) timezone: string;
+  @ApiProperty() now: string;
+  @ApiProperty({ nullable: true, type: String }) holiday: string | null;
+  @ApiProperty({
+    example: {
+      working: 5,
+      on_break: 1,
+      finished: 0,
+      late: 1,
+      not_started: 0,
+      day_off: 0,
+    },
+  })
+  counts: Record<string, number>;
+  @ApiProperty({ type: [TodayEmployeeDto] }) employees: TodayEmployeeDto[];
 }

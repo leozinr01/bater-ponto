@@ -27,6 +27,7 @@ const dotColor: Record<string, string> = {
 
 function statusLabel(day: TimesheetDay | undefined) {
   if (!day) return 'Sem dados';
+  if (day.holiday && day.punches.length === 0) return `Feriado: ${day.holiday}`;
   if (day.status === 'complete' && day.punches.length === 0) return day.scheduled ? 'Sem marcações' : 'Folga';
   return { complete: 'Completo', incomplete: 'Incompleto', in_progress: 'Em andamento', absent: 'Falta' }[day.status];
 }
@@ -50,7 +51,11 @@ export function WeekStrip({ days, todayDate }: { days: TimesheetDay[]; todayDate
           const isToday = date === todayDate;
           const isSelected = date === selected;
           const weekday = WEEKDAYS[new Date(`${date}T12:00:00Z`).getUTCDay()];
-          const dot = d && !(d.status === 'complete' && d.punches.length === 0) ? dotColor[d.status] : null;
+          const dot = d?.holiday && !d.punches.length
+            ? 'bg-brand-300'
+            : d && !(d.status === 'complete' && d.punches.length === 0)
+              ? dotColor[d.status]
+              : null;
           const worked = d?.workedMinutes ?? 0;
           return (
             <button

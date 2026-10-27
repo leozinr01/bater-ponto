@@ -60,6 +60,18 @@ model WorkSchedule {
   @@map("work_schedules")
 }
 
+/// Feriado da empresa: num dia de trabalho, não gera falta e todo o tempo trabalhado conta como extra.
+model Holiday {
+  id   String @id @default(uuid())
+  /// Data local (YYYY-MM-DD, no fuso APP_TIMEZONE).
+  date String @unique
+  name String
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("holidays")
+}
+
 enum PunchSource {
   EMPLOYEE
   ADMIN

@@ -1,5 +1,5 @@
 import { formatMinutes } from '../lib/format';
-import type { DayStatus, TimesheetDay } from '../lib/types';
+import type { DayAlert, DayStatus, TimesheetDay } from '../lib/types';
 import { Badge } from './ui';
 
 const statusMap: Record<DayStatus, { label: string; tone: 'green' | 'amber' | 'red' | 'blue' }> = {
@@ -10,6 +10,13 @@ const statusMap: Record<DayStatus, { label: string; tone: 'green' | 'amber' | 'r
 };
 
 export function DayStatusBadge({ day }: { day: TimesheetDay }) {
+  if (day.holiday && day.punches.length === 0) {
+    return (
+      <Badge tone="brand" dot>
+        Feriado
+      </Badge>
+    );
+  }
   if (day.status === 'complete' && day.punches.length === 0) {
     return <Badge>{day.scheduled ? '–' : 'Folga'}</Badge>;
   }
@@ -32,4 +39,22 @@ export function Balance({ overtime, deficit }: { overtime: number | null; defici
       {formatMinutes(balance)}
     </span>
   );
+}
+
+export const alertLabels: Record<DayAlert, { label: string; detail: string }> = {
+  short_break: {
+    label: 'Intervalo curto',
+    detail: 'Intervalo abaixo do mínimo: 1h para jornada acima de 6h, 15 min acima de 4h (CLT art. 71)',
+  },
+  overtime_limit: { label: '+2h extras', detail: 'Mais de 2 horas extras no dia (CLT art. 59)' },
+  short_rest: { label: 'Descanso < 11h', detail: 'Menos de 11h de descanso desde a jornada anterior (CLT art. 66)' },
+};
+
+/** Selos dos alertas da CLT de um dia. */
+export function DayAlerts({ alerts }: { alerts: DayAlert[] }) {
+  return alerts.map((alert) => (
+    <span key={alert} title={alertLabels[alert].detail}>
+      <Badge tone="amber">{alertLabels[alert].label}</Badge>
+    </span>
+  ));
 }

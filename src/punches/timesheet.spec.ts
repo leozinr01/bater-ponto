@@ -288,6 +288,7 @@ describe('buildTimesheet', () => {
       deficitMinutes: 60,
       incompleteDays: 0,
       absentDays: 0,
+      alertDays: 2, // os dois dias passam de 6h sem intervalo
     });
   });
 });
@@ -317,5 +318,109 @@ describe('groupIntoShifts', () => {
       p('2026-10-19T18:00'),
     ]);
     expect(shifts).toHaveLength(1);
+  });
+});
+
+describe('feriados', () => {
+  const holidays = new Map([['2026-10-19', 'Feriado municipal']]);
+
+  it('não conta falta num feriado em dia de trabalho', () => {
+    const { days, totals } = build([], { holidays });
+    expect(days).toHaveLength(1);
+    expect(days[0]).toMatchObject({
+      holiday: 'Feriado municipal',
+      scheduled: false,
+      status: 'complete',
+      expectedMinutes: 0,
+    });
+    expect(totals).toMatchObject({ absentDays: 0, expectedMinutes: 0 });
+  });
+
+  it('conta como extra todo o tempo trabalhado no feriado, sem atraso', () => {
+    const { days } = build([p('2026-10-19T10:00'), p('2026-10-19T14:00')], {
+      holidays,
+    });
+    expect(days[0]).toMatchObject({
+      holiday: 'Feriado municipal',
+      lateMinutes: 0,
+      overtimeMinutes: 240,
+      deficitMinutes: 0,
+    });
+  });
+
+  it('ignora feriado que cai em dia sem trabalho', () => {
+    const { days } = build([], {
+      holidays: new Map([['2026-10-18', 'Domingo de feriado']]),
+      from: '2026-10-18',
+      to: '2026-10-18',
+    });
+    expect(days).toHaveLength(0);
+  });
+});
+
+describe('alertas da CLT', () => {
+  it('alerta intervalo menor que 1h em jornada acima de 6h', () => {
+    const { days, totals } = build([
+      p('2026-10-19T08:00'),
+      p('2026-10-19T12:00'),
+      p('2026-10-19T12:30'),
+      p('2026-10-19T17:00'),
+    ]);
+    expect(days[0].alerts).toEqual(['short_break']);
+    expect(totals.alertDays).toBe(1);
+  });
+
+  it('alerta jornada acima de 6h sem nenhum intervalo', () => {
+    const { days } = build([p('2026-10-19T08:00'), p('2026-10-19T16:00')]);
+    expect(days[0].alerts).toContain('short_break');
+  });
+
+  it('não alerta jornada normal com 1h de intervalo', () => {
+    const { days, totals } = build([
+      p('2026-10-19T08:00'),
+      p('2026-10-19T12:00'),
+      p('2026-10-19T13:00'),
+      p('2026-10-19T17:00'),
+    ]);
+    expect(days[0].alerts).toEqual([]);
+    expect(totals.alertDays).toBe(0);
+  });
+
+  it('alerta mais de 2h extras no dia', () => {
+    const { days } = build([
+      p('2026-10-19T08:00'),
+      p('2026-10-19T12:00'),
+      p('2026-10-19T13:00'),
+      p('2026-10-19T20:00'),
+    ]);
+    expect(days[0].overtimeMinutes).toBe(180);
+    expect(days[0].alerts).toEqual(['overtime_limit']);
+  });
+
+  it('alerta menos de 11h de descanso desde a jornada anterior', () => {
+    const { days } = build(
+      [
+        p('2026-10-19T14:00'),
+        p('2026-10-19T18:00'),
+        p('2026-10-19T19:00'),
+        p('2026-10-19T23:00'),
+        p('2026-10-20T08:00'),
+        p('2026-10-20T12:00'),
+        p('2026-10-20T13:00'),
+        p('2026-10-20T17:00'),
+      ],
+      { to: '2026-10-20' },
+    );
+    expect(days[0].alerts).toEqual([]);
+    expect(days[1].alerts).toEqual(['short_rest']);
+  });
+
+  it('não avalia alertas em dia incompleto', () => {
+    const { days } = build([
+      p('2026-10-19T08:00'),
+      p('2026-10-19T12:00'),
+      p('2026-10-19T12:10'),
+    ]);
+    expect(days[0]).toMatchObject({ status: 'incomplete', alerts: [] });
   });
 });

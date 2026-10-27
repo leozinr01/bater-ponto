@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
 import { EmployeesModule } from './employees/employees.module';
+import { HolidaysModule } from './holidays/holidays.module';
 import { DatabaseModule } from './infra/database/database.module';
 import { envSchema } from './infra/env/env';
 import { PunchesModule } from './punches/punches.module';
@@ -17,6 +18,7 @@ import { WorkSchedulesModule } from './work-schedules/work-schedules.module';
     AuthModule,
     EmployeesModule,
     WorkSchedulesModule,
+    HolidaysModule,
     PunchesModule,
   ],
 })

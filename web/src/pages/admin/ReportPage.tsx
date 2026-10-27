@@ -38,6 +38,7 @@ async function exportCsv(from: string, to: string) {
     'Atrasos',
     'Faltas (dias)',
     'Dias incompletos',
+    'Dias com alerta (CLT)',
   ];
   const rows = items.map(({ employee, totals: t }) => [
     employee.name,
@@ -48,6 +49,7 @@ async function exportCsv(from: string, to: string) {
     formatMinutes(t.lateMinutes),
     t.absentDays,
     t.incompleteDays,
+    t.alertDays,
   ]);
   const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\r\n');
   const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
@@ -171,6 +173,12 @@ export function ReportPage() {
                       <th className={cn(table.th, 'text-right')}>Atrasos</th>
                       <th className={cn(table.th, 'text-right')}>Faltas</th>
                       <th className={cn(table.th, 'text-right')}>Incompletos</th>
+                      <th
+                        className={cn(table.th, 'text-right')}
+                        title="Dias com intervalo curto, mais de 2h extras ou menos de 11h de descanso"
+                      >
+                        Alertas
+                      </th>
                       <th className={table.th} />
                     </tr>
                   </thead>
@@ -213,6 +221,13 @@ export function ReportPage() {
                             <span className="text-slate-600">0</span>
                           )}
                         </td>
+                        <td className={cn(table.td, 'text-right tabular-nums')}>
+                          {t.alertDays > 0 ? (
+                            <span className="font-semibold text-amber-300">{t.alertDays}</span>
+                          ) : (
+                            <span className="text-slate-600">0</span>
+                          )}
+                        </td>
                         <td className={cn(table.td, 'text-right')}>
                           <Link
                             to={`/registros?funcionario=${employee.id}${month === currentMonth() ? '' : `&mes=${month}`}`}
@@ -235,7 +250,8 @@ export function ReportPage() {
             />
           </Card>
           <p className="text-xs text-slate-500">
-            Saldo = horas extras − falta de horas. Dias incompletos só entram no saldo depois de corrigidos.
+            Saldo = horas extras − falta de horas. Dias incompletos só entram no saldo depois de corrigidos. Alertas = dias
+            com intervalo abaixo do mínimo, mais de 2h extras ou menos de 11h de descanso entre jornadas (CLT).
           </p>
         </div>
       )}

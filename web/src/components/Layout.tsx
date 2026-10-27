@@ -1,8 +1,10 @@
 import {
   CalendarClock,
+  CalendarHeart,
   ChartColumn,
   ClipboardList,
   Fingerprint,
+  LayoutDashboard,
   LayoutGrid,
   LogOut,
   UserRound,
@@ -32,9 +34,11 @@ const employeeLinks: NavEntry[] = [
 ];
 
 const adminLinks: NavEntry[] = [
+  { to: '/admin/hoje', label: 'Hoje', icon: LayoutDashboard },
   { to: '/admin/relatorio', label: 'Relatório', icon: ChartColumn },
   { to: '/admin/funcionarios', label: 'Funcionários', icon: Users },
   { to: '/admin/jornadas', label: 'Jornadas', icon: CalendarClock },
+  { to: '/admin/feriados', label: 'Feriados', icon: CalendarHeart },
 ];
 
 /** Marca: monograma TAI + nome do sistema. */

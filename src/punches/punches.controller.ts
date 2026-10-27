@@ -30,6 +30,7 @@ import {
   ReportItemDto,
   ReportQueryDto,
   TimesheetResponseDto,
+  TodayResponseDto,
   VoidPunchDto,
 } from './punches.dto';
 import { PunchesService } from './punches.service';
@@ -88,6 +89,18 @@ export class PunchesController {
   @ApiPaginatedResponse(ReportItemDto)
   report(@Query() query: ReportQueryDto) {
     return this.punchesService.report(query);
+  }
+
+  @Get('today')
+  @Roles(['ADMIN'])
+  @ApiOperation({
+    summary: 'Painel do dia: situação de cada funcionário ativo agora (admin)',
+    description:
+      'Trabalhando, em intervalo, encerrou, atrasado (passou do horário + tolerância sem marcar), ainda não chegou ou de folga.',
+  })
+  @ApiOkResponse({ type: TodayResponseDto })
+  today() {
+    return this.punchesService.today();
   }
 
   @Post('manual')

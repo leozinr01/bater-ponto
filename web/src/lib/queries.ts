@@ -7,12 +7,14 @@ import {
 import { api } from './api';
 import type {
   Employee,
+  Holiday,
   Paginated,
   Punch,
   RegisteredPunch,
   ReportItem,
   Role,
   Timesheet,
+  TodayOverview,
   WorkSchedule,
   WorkScheduleInput,
 } from './types';
@@ -57,12 +59,21 @@ export function useReport(params: { from: string; to: string; page: number }) {
   });
 }
 
+/** Painel do dia (admin), atualizado a cada minuto. */
+export function useToday() {
+  return useQuery({
+    queryKey: ['today'],
+    queryFn: () => api<TodayOverview>('/punches/today'),
+    refetchInterval: 60_000,
+  });
+}
+
 /** Invalida tudo que depende das marcações. */
 function useInvalidatePunches() {
   const queryClient = useQueryClient();
   return () =>
     Promise.all(
-      ['timesheet', 'punches', 'report'].map((key) =>
+      ['timesheet', 'punches', 'report', 'today'].map((key) =>
         queryClient.invalidateQueries({ queryKey: [key] }),
       ),
     );
@@ -205,5 +216,50 @@ export function useSaveSchedule() {
       queryClient.invalidateQueries({ queryKey: ['timesheet'] });
       queryClient.invalidateQueries({ queryKey: ['report'] });
     },
+  });
+}
+
+// ---- Feriados ----
+
+export function useHolidays(year: number) {
+  return useQuery({
+    queryKey: ['holidays', year],
+    queryFn: () => api<Holiday[]>('/holidays', { query: { year } }),
+  });
+}
+
+/** Feriados mudam faltas e saldos: invalida os cálculos junto. */
+function useInvalidateHolidays() {
+  const queryClient = useQueryClient();
+  return () =>
+    Promise.all(
+      ['holidays', 'timesheet', 'report', 'today'].map((key) =>
+        queryClient.invalidateQueries({ queryKey: [key] }),
+      ),
+    );
+}
+
+export function useCreateHoliday() {
+  const invalidate = useInvalidateHolidays();
+  return useMutation({
+    mutationFn: (body: { date: string; name: string }) => api<Holiday>('/holidays', { method: 'POST', body }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteHoliday() {
+  const invalidate = useInvalidateHolidays();
+  return useMutation({
+    mutationFn: (id: string) => api<void>(`/holidays/${id}`, { method: 'DELETE' }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useImportNationalHolidays() {
+  const invalidate = useInvalidateHolidays();
+  return useMutation({
+    mutationFn: (year: number) =>
+      api<{ created: number; skipped: number }>('/holidays/national', { method: 'POST', query: { year } }),
+    onSuccess: invalidate,
   });
 }

@@ -1,10 +1,12 @@
 import { AuthUser } from '@/auth/decorators';
 import { paginated, toPrismaPage } from '@/common/pagination';
+import { HolidaysService } from '@/holidays/holidays.service';
 import {
   addDays,
   isValidDate,
   localDate,
   localDateTime,
+  weekday,
   zonedInstant,
 } from '@/common/time';
 import { PrismaService } from '@/infra/database/prisma.service';
@@ -26,7 +28,9 @@ import {
 import {
   buildTimesheet,
   groupIntoShifts,
+  MAX_BREAK_MINUTES,
   MAX_WORK_PERIOD_MINUTES,
+  TimesheetDay,
 } from './timesheet';
 
 /** Duas marcações do mesmo funcionário em menos tempo que isso são tratadas como clique duplicado. */
@@ -34,6 +38,25 @@ const DUPLICATE_WINDOW_MS = 60_000;
 const MAX_PERIOD_DAYS = 93;
 
 type Tx = Prisma.TransactionClient;
+type EmployeeWithSchedule = Prisma.UserGetPayload<{
+  include: { workSchedule: true };
+}>;
+
+/**
+ * Situação do funcionário agora:
+ * working = jornada aberta; on_break = saiu, mas ainda não cumpriu a carga do dia;
+ * finished = encerrou o dia; late = dia de trabalho, passou do horário + tolerância e não chegou;
+ * not_started = ainda dentro do horário (ou sem jornada); day_off = folga ou feriado.
+ */
+export const PRESENCE_STATUSES = [
+  'working',
+  'on_break',
+  'finished',
+  'late',
+  'not_started',
+  'day_off',
+] as const;
+export type PresenceStatus = (typeof PRESENCE_STATUSES)[number];
 
 @Injectable()
 export class PunchesService {
@@ -41,6 +64,7 @@ export class PunchesService {
 
   constructor(
     private prisma: PrismaService,
+    private holidays: HolidaysService,
     env: EnvService,
   ) {
     this.tz = env.get('APP_TIMEZONE');
@@ -136,12 +160,17 @@ export class PunchesService {
     });
     if (!employee) throw new NotFoundException('Funcionário não encontrado');
 
-    const punches = await this.validPunchesInWindow(
-      [employeeId],
+    const [punches, holidays] = await Promise.all([
+      this.validPunchesInWindow([employeeId], query.from, query.to),
+      this.holidays.byDate(query.from, query.to),
+    ]);
+    return this.buildEmployeeTimesheet(
+      employee,
+      punches,
       query.from,
       query.to,
+      holidays,
     );
-    return this.buildEmployeeTimesheet(employee, punches, query.from, query.to);
   }
 
   /** Totais do período por funcionário, paginado por funcionário. */
@@ -160,11 +189,14 @@ export class PunchesService {
       this.prisma.user.count({ where }),
     ]);
 
-    const punches = await this.validPunchesInWindow(
-      employees.map((e) => e.id),
-      query.from,
-      query.to,
-    );
+    const [punches, holidays] = await Promise.all([
+      this.validPunchesInWindow(
+        employees.map((e) => e.id),
+        query.from,
+        query.to,
+      ),
+      this.holidays.byDate(query.from, query.to),
+    ]);
 
     const data = employees.map((employee) => {
       const sheet = this.buildEmployeeTimesheet(
@@ -172,11 +204,115 @@ export class PunchesService {
         punches.filter((p) => p.userId === employee.id),
         query.from,
         query.to,
+        holidays,
       );
       return { employee: sheet.employee, totals: sheet.totals };
     });
 
     return paginated(data, total, query);
+  }
+
+  /** Painel do dia: situação de cada funcionário ativo agora. */
+  async today() {
+    const now = new Date();
+    const today = localDate(now, this.tz);
+    const yesterday = addDays(today, -1);
+
+    const employees = await this.prisma.user.findMany({
+      where: { active: true },
+      include: { workSchedule: true },
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
+    });
+    const [punches, holidays] = await Promise.all([
+      this.validPunchesInWindow(
+        employees.map((e) => e.id),
+        yesterday,
+        today,
+      ),
+      this.holidays.byDate(yesterday, today),
+    ]);
+    const holiday = holidays.get(today) ?? null;
+
+    const items = employees.map((employee) => {
+      const { days } = buildTimesheet({
+        punches: punches.filter((p) => p.userId === employee.id),
+        schedule: employee.workSchedule,
+        timezone: this.tz,
+        from: yesterday,
+        to: today,
+        now,
+        employeeSince: localDate(employee.createdAt, this.tz),
+        holidays,
+      });
+      // Jornada noturna iniciada ontem e ainda aberta conta como o "hoje" dela
+      const day =
+        days.find((d) => d.date === yesterday && d.status === 'in_progress') ??
+        days.find((d) => d.date === today);
+      const first = day?.punches[0];
+      const last = day?.punches.at(-1);
+      const open = day?.periods.find((p) => p.end === null);
+
+      return {
+        employee: { id: employee.id, name: employee.name },
+        scheduleName: employee.workSchedule?.name ?? null,
+        expectedStart: employee.workSchedule?.startTime ?? null,
+        expectedMinutes: day?.expectedMinutes ?? null,
+        status: this.presence(employee, day, holiday, today, now),
+        firstPunch: first ? localDateTime(first.timestamp, this.tz) : null,
+        lastPunch: last ? localDateTime(last.timestamp, this.tz) : null,
+        /** Início do período em aberto: a tela soma o tempo corrido a workedMinutes. */
+        workingSince: open ? localDateTime(open.start, this.tz) : null,
+        workedMinutes: day?.workedMinutes ?? 0,
+        lateMinutes: day?.lateMinutes ?? null,
+      };
+    });
+
+    const counts = Object.fromEntries(
+      PRESENCE_STATUSES.map((status) => [
+        status,
+        items.filter((i) => i.status === status).length,
+      ]),
+    ) as Record<PresenceStatus, number>;
+
+    return {
+      date: today,
+      timezone: this.tz,
+      now: localDateTime(now, this.tz),
+      holiday,
+      counts,
+      employees: items,
+    };
+  }
+
+  private presence(
+    employee: EmployeeWithSchedule,
+    day: TimesheetDay | undefined,
+    holiday: string | null,
+    today: string,
+    now: Date,
+  ): PresenceStatus {
+    if (day && day.punches.length > 0) {
+      if (day.status === 'in_progress') return 'working';
+      const minutesSinceLast =
+        (now.getTime() - day.punches.at(-1)!.timestamp.getTime()) / 60_000;
+      // Sem jornada não há carga: depois de um único período, a saída é tratada como intervalo
+      const owesTime =
+        day.expectedMinutes !== null
+          ? day.workedMinutes < day.expectedMinutes
+          : day.periods.length === 1;
+      return owesTime && minutesSinceLast < MAX_BREAK_MINUTES
+        ? 'on_break'
+        : 'finished';
+    }
+
+    const schedule = employee.workSchedule;
+    if (!schedule) return 'not_started';
+    if (holiday || !schedule.workDays.includes(weekday(today)))
+      return 'day_off';
+    const deadline =
+      zonedInstant(today, schedule.startTime, this.tz).getTime() +
+      schedule.lateToleranceMinutes * 60_000;
+    return now.getTime() > deadline ? 'late' : 'not_started';
   }
 
   /** Inclusão manual de marcação por um administrador, com justificativa. */
@@ -260,10 +396,11 @@ export class PunchesService {
   }
 
   private buildEmployeeTimesheet(
-    employee: Prisma.UserGetPayload<{ include: { workSchedule: true } }>,
+    employee: EmployeeWithSchedule,
     punches: PunchClock[],
     from: string,
     to: string,
+    holidays: Map<string, string>,
   ) {
     const schedule = employee.workSchedule;
     const { days, totals } = buildTimesheet({
@@ -274,6 +411,7 @@ export class PunchesService {
       to,
       now: new Date(),
       employeeSince: localDate(employee.createdAt, this.tz),
+      holidays,
     });
 
     return {

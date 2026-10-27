@@ -61,10 +61,14 @@ export interface RegisteredPunch extends Punch {
 
 export type DayStatus = 'complete' | 'incomplete' | 'in_progress' | 'absent';
 
+/** Alertas da CLT: intervalo curto (art. 71), mais de 2h extras (art. 59), descanso < 11h (art. 66). */
+export type DayAlert = 'short_break' | 'overtime_limit' | 'short_rest';
+
 export interface TimesheetDay {
   date: string;
   weekday: number;
   scheduled: boolean;
+  holiday: string | null;
   status: DayStatus;
   punches: { id: string; timestamp: string; localTime: string }[];
   periods: { start: string; end: string | null; minutes: number }[];
@@ -74,6 +78,7 @@ export interface TimesheetDay {
   lateMinutes: number | null;
   overtimeMinutes: number | null;
   deficitMinutes: number | null;
+  alerts: DayAlert[];
 }
 
 export interface TimesheetTotals {
@@ -84,6 +89,7 @@ export interface TimesheetTotals {
   deficitMinutes: number | null;
   incompleteDays: number;
   absentDays: number;
+  alertDays: number;
 }
 
 export interface Timesheet {
@@ -99,4 +105,36 @@ export interface Timesheet {
 export interface ReportItem {
   employee: { id: string; name: string };
   totals: TimesheetTotals;
+}
+
+export interface Holiday {
+  id: string;
+  date: string;
+  name: string;
+  createdAt: string;
+}
+
+export type PresenceStatus = 'working' | 'on_break' | 'finished' | 'late' | 'not_started' | 'day_off';
+
+export interface TodayEmployee {
+  employee: { id: string; name: string };
+  scheduleName: string | null;
+  expectedStart: string | null;
+  expectedMinutes: number | null;
+  status: PresenceStatus;
+  firstPunch: string | null;
+  lastPunch: string | null;
+  /** Início do período em aberto: o tempo corrido soma a workedMinutes. */
+  workingSince: string | null;
+  workedMinutes: number;
+  lateMinutes: number | null;
+}
+
+export interface TodayOverview {
+  date: string;
+  timezone: string;
+  now: string;
+  holiday: string | null;
+  counts: Record<PresenceStatus, number>;
+  employees: TodayEmployee[];
 }

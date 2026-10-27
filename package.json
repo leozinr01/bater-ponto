@@ -20,7 +20,8 @@
     "test:all": "npm test && npm run test:e2e",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "migrate:dev": "prisma migrate dev",
-    "admin:create": "ts-node --transpile-only prisma/create-admin.ts"
+    "admin:create": "ts-node --transpile-only prisma/create-admin.ts",
+    "seed:demo": "ts-node --transpile-only -r tsconfig-paths/register prisma/seed-demo.ts"
   },
   "dependencies": {
     "@nestjs/cli": "^11.0.0",

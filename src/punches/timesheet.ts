@@ -14,10 +14,17 @@ import { addDays, localDate, weekday, zonedInstant } from '@/common/time';
  * - Jornadas com número ímpar de marcações ficam "incomplete": nenhum horário é
  *   inventado, só os pares completos contam como trabalhados, e extra/falta não é
  *   calculado até que a marcação faltante seja corrigida.
+ * - Feriado num dia de trabalho: não há horas previstas nem falta; o que for trabalhado
+ *   conta como extra.
+ * - Alertas (CLT) só são avaliados em jornadas completas: intervalo intrajornada
+ *   menor que o mínimo (art. 71), mais de 2h extras no dia (art. 59) e menos de 11h
+ *   de descanso desde a jornada anterior (art. 66).
  */
 
 export const MAX_WORK_PERIOD_MINUTES = 14 * 60;
 export const MAX_BREAK_MINUTES = 6 * 60;
+export const MAX_DAILY_OVERTIME_MINUTES = 2 * 60;
+export const MIN_REST_BETWEEN_SHIFTS_MINUTES = 11 * 60;
 
 export interface PunchInput {
   id: string;
@@ -41,10 +48,19 @@ export interface WorkPeriod {
 
 export type DayStatus = 'complete' | 'incomplete' | 'in_progress' | 'absent';
 
+/**
+ * short_break: intervalo menor que 1h (jornada > 6h) ou 15 min (jornada > 4h);
+ * overtime_limit: mais de 2h extras; short_rest: menos de 11h desde a jornada anterior.
+ */
+export type DayAlert = 'short_break' | 'overtime_limit' | 'short_rest';
+
 export interface TimesheetDay {
   date: string;
   weekday: number;
+  /** Dia de trabalho pela jornada (falso em feriados). */
   scheduled: boolean;
+  /** Nome do feriado, quando a data é feriado. */
+  holiday: string | null;
   status: DayStatus;
   punches: PunchInput[];
   periods: WorkPeriod[];
@@ -55,6 +71,7 @@ export interface TimesheetDay {
   lateMinutes: number | null;
   overtimeMinutes: number | null;
   deficitMinutes: number | null;
+  alerts: DayAlert[];
 }
 
 export interface TimesheetTotals {
@@ -65,6 +82,8 @@ export interface TimesheetTotals {
   deficitMinutes: number | null;
   incompleteDays: number;
   absentDays: number;
+  /** Dias com pelo menos um alerta. */
+  alertDays: number;
 }
 
 export interface BuildTimesheetInput {
@@ -77,6 +96,8 @@ export interface BuildTimesheetInput {
   now: Date;
   /** Data local a partir da qual faltas são consideradas (ex: data de cadastro). */
   employeeSince: string;
+  /** Feriados por data local (YYYY-MM-DD -> nome). */
+  holidays?: Map<string, string>;
 }
 
 /** Marcações valem com precisão de minuto: os segundos são desconsiderados. */
@@ -137,14 +158,40 @@ function rawLateMinutes(
   return Math.max(0, minutesBetween(expectedStart, firstPunch));
 }
 
+function isWorkDay(schedule: ScheduleInput | null, date: string) {
+  return !!schedule && schedule.workDays.includes(weekday(date));
+}
+
+function dayAlerts(
+  day: Pick<TimesheetDay, 'workedMinutes' | 'breakMinutes' | 'overtimeMinutes'>,
+  restBeforeMinutes: number | null,
+): DayAlert[] {
+  const alerts: DayAlert[] = [];
+  const minBreak =
+    day.workedMinutes > 6 * 60 ? 60 : day.workedMinutes > 4 * 60 ? 15 : 0;
+  if (day.breakMinutes < minBreak) alerts.push('short_break');
+  if ((day.overtimeMinutes ?? 0) > MAX_DAILY_OVERTIME_MINUTES) {
+    alerts.push('overtime_limit');
+  }
+  if (
+    restBeforeMinutes !== null &&
+    restBeforeMinutes < MIN_REST_BETWEEN_SHIFTS_MINUTES
+  ) {
+    alerts.push('short_rest');
+  }
+  return alerts;
+}
+
 function buildDay(
   date: string,
   shifts: PunchInput[][],
   schedule: ScheduleInput | null,
   input: BuildTimesheetInput,
+  restBeforeMinutes: number | null,
 ): TimesheetDay {
   const { timezone, now } = input;
-  const scheduled = !!schedule && schedule.workDays.includes(weekday(date));
+  const holiday = input.holidays?.get(date) ?? null;
+  const scheduled = isWorkDay(schedule, date) && !holiday;
   const expectedMinutes = schedule
     ? scheduled
       ? schedule.dailyMinutes
@@ -192,6 +239,7 @@ function buildDay(
     date,
     weekday: weekday(date),
     scheduled,
+    holiday,
     status,
     punches,
     periods,
@@ -201,6 +249,13 @@ function buildDay(
     lateMinutes,
     overtimeMinutes,
     deficitMinutes,
+    alerts:
+      status === 'complete'
+        ? dayAlerts(
+            { workedMinutes, breakMinutes, overtimeMinutes },
+            restBeforeMinutes,
+          )
+        : [],
   };
 }
 
@@ -217,34 +272,66 @@ export function buildTimesheet(input: BuildTimesheetInput): {
   const today = localDate(now, timezone);
 
   const shiftsByDate = new Map<string, PunchInput[][]>();
+  /** Descanso antes da primeira jornada de cada data (só quando a anterior foi fechada). */
+  const restBefore = new Map<string, number>();
+  let previous: PunchInput[] | undefined;
   for (const shift of groupIntoShifts(punches)) {
     const date = localDate(shift[0].timestamp, timezone);
+    if (!shiftsByDate.has(date) && previous && previous.length % 2 === 0) {
+      restBefore.set(
+        date,
+        minutesBetween(previous.at(-1)!.timestamp, shift[0].timestamp),
+      );
+    }
     shiftsByDate.set(date, [...(shiftsByDate.get(date) ?? []), shift]);
+    previous = shift;
   }
 
   const days: TimesheetDay[] = [];
   for (let date = from; date <= to; date = addDays(date, 1)) {
     const shifts = shiftsByDate.get(date);
     if (shifts) {
-      days.push(buildDay(date, shifts, schedule, input));
+      days.push(
+        buildDay(date, shifts, schedule, input, restBefore.get(date) ?? null),
+      );
       continue;
     }
 
-    const scheduled = !!schedule && schedule.workDays.includes(weekday(date));
-    if (scheduled && date >= employeeSince && date < today) {
+    const holiday = input.holidays?.get(date) ?? null;
+    const workDay = isWorkDay(schedule, date);
+    if (holiday && workDay) {
       days.push({
         date,
         weekday: weekday(date),
-        scheduled,
+        scheduled: false,
+        holiday,
+        status: 'complete',
+        punches: [],
+        periods: [],
+        workedMinutes: 0,
+        breakMinutes: 0,
+        expectedMinutes: 0,
+        lateMinutes: null,
+        overtimeMinutes: null,
+        deficitMinutes: null,
+        alerts: [],
+      });
+    } else if (workDay && date >= employeeSince && date < today) {
+      days.push({
+        date,
+        weekday: weekday(date),
+        scheduled: true,
+        holiday: null,
         status: 'absent',
         punches: [],
         periods: [],
         workedMinutes: 0,
         breakMinutes: 0,
-        expectedMinutes: schedule.dailyMinutes,
+        expectedMinutes: schedule!.dailyMinutes,
         lateMinutes: null,
         overtimeMinutes: null,
         deficitMinutes: null,
+        alerts: [],
       });
     }
   }
@@ -259,6 +346,7 @@ export function buildTimesheet(input: BuildTimesheetInput): {
       deficitMinutes: sumOrNull(days.map((d) => d.deficitMinutes)),
       incompleteDays: days.filter((d) => d.status === 'incomplete').length,
       absentDays: days.filter((d) => d.status === 'absent').length,
+      alertDays: days.filter((d) => d.alerts.length > 0).length,
     },
   };
 }

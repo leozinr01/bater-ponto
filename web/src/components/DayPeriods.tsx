@@ -98,6 +98,8 @@ export function DayDetail({ day, date, future }: { day?: TimesheetDay; date: str
             ? 'Esse dia ainda não chegou.'
             : !day
               ? 'Esse dia é do mês anterior: veja nos registros dele.'
+              : day.holiday
+              ? `Feriado: ${day.holiday}.`
               : day.status === 'absent'
               ? 'Falta: nenhuma marcação num dia de trabalho.'
               : day.scheduled
