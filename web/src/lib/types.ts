@@ -65,7 +65,7 @@ export type DayStatus = 'complete' | 'incomplete' | 'in_progress' | 'absent';
 export type DayAlert = 'short_break' | 'overtime_limit' | 'short_rest';
 
 /** MEDICAL = atestado; VACATION = férias; LEAVE = afastamento; ALLOWANCE = abono. */
-export type AbsenceType = 'MEDICAL' | 'VACATION' | 'LEAVE' | 'ALLOWANCE';
+export type AbsenceType = 'MEDICAL' | 'VACATION' | 'LEAVE' | 'ALLOWANCE' | 'COMPENSATION';
 
 export interface TimesheetDay {
   date: string;
@@ -82,6 +82,7 @@ export interface TimesheetDay {
   lateMinutes: number | null;
   overtimeMinutes: number | null;
   deficitMinutes: number | null;
+  compensatedMinutes: number;
   alerts: DayAlert[];
 }
 
@@ -91,6 +92,7 @@ export interface TimesheetTotals {
   lateMinutes: number | null;
   overtimeMinutes: number | null;
   deficitMinutes: number | null;
+  compensatedMinutes: number;
   incompleteDays: number;
   absentDays: number;
   excusedDays: number;
@@ -110,6 +112,8 @@ export interface Timesheet {
 export interface ReportItem {
   employee: { id: string; name: string };
   totals: TimesheetTotals;
+  /** Saldo do banco de horas acumulado até o fim do período. */
+  hourBankMinutes: number;
 }
 
 export interface Holiday {
@@ -158,4 +162,35 @@ export interface Absence {
   canceled: boolean;
   canceledAt: string | null;
   canceledById: string | null;
+}
+
+export interface HourBankMovement {
+  overtimeMinutes: number;
+  deficitMinutes: number;
+  compensatedMinutes: number;
+  adjustmentMinutes: number;
+  balanceMinutes: number;
+}
+
+export interface HourBankEntry {
+  id: string;
+  employeeId: string;
+  date: string;
+  minutes: number;
+  reason: string;
+  createdAt: string;
+  createdById: string;
+  createdByName: string | null;
+  canceled: boolean;
+  canceledAt: string | null;
+}
+
+export interface HourBank {
+  employee: { id: string; name: string };
+  since: string;
+  until: string;
+  totals: HourBankMovement;
+  pendingDays: number;
+  months: (HourBankMovement & { month: string; accumulatedMinutes: number; pendingDays: number })[];
+  entries: HourBankEntry[];
 }

@@ -48,7 +48,7 @@ Itens que, pelo que conhecemos da Portaria 671, são exigidos de um REP-P e prec
 | Tolerância de 5 min por marcação, máx. 10 min diários | CLT art. 58, §1º | Tolerâncias são configuráveis, mas aplicadas por dia (atraso e saldo diário), não por marcação. Validar se o modelo atende |
 | Hora noturna reduzida (52m30s) e adicional noturno (22h às 5h) | CLT art. 73 | **Não implementado.** Jornadas noturnas são calculadas em minutos de relógio |
 | Limite de 2h extras/dia e adicional mínimo de 50% | CLT art. 59; CF art. 7º, XVI | Horas extras são contadas e dias com mais de 2h extras recebem **alerta**. Não há bloqueio nem cálculo de adicional |
-| Banco de horas e compensação | CLT art. 59, §§2º, 5º e 6º | Não implementado |
+| Banco de horas e compensação | CLT art. 59, §§2º, 5º e 6º | Saldo acumulado desde o cadastro (extras − falta de horas − folgas de banco ± ajustes manuais), com extrato mensal. Não há prazo de compensação (6 meses no acordo individual, 1 ano no coletivo), vencimento automático nem pagamento do saldo na rescisão: precisam de regra do acordo e são lançados como ajuste |
 | Intervalo intrajornada mínimo (1h para jornadas > 6h; 15 min entre 4h e 6h) | CLT art. 71 | Intervalos são calculados e dias abaixo do mínimo recebem **alerta** |
 | Interjornada mínima de 11h | CLT art. 66 | Dias com menos de 11h de descanso desde a jornada anterior recebem **alerta** |
 | Descanso semanal remunerado, feriados nacionais/locais | Lei 605/1949 | Feriados cadastrados (com importação dos nacionais) não geram falta, e o trabalho neles conta como extra. Feriados estaduais e municipais precisam ser cadastrados à mão. DSR não é calculado |
@@ -67,6 +67,6 @@ Itens que, pelo que conhecemos da Portaria 671, são exigidos de um REP-P e prec
 
 1. Decidir a modalidade (REP-P ou REP-A) com o jurídico e verificar a convenção coletiva aplicável.
 2. Modelar empresa/estabelecimento e CPF do trabalhador; adicionar NSR.
-3. Implementar abono de horas parciais e banco de horas (correções de cálculo com maior impacto prático).
+3. Implementar abono de horas parciais e o prazo de compensação do banco de horas conforme o acordo.
 4. Implementar adicional noturno/hora reduzida e o cálculo do adicional de horas extras.
 5. Se for REP-P: comprovante assinado, AFD/AEJ no leiaute oficial com assinatura ICP-Brasil, registro no INPI e atestado técnico.

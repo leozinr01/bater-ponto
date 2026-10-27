@@ -42,7 +42,7 @@ const DUPLICATE_WINDOW_MS = 60_000;
 const MAX_PERIOD_DAYS = 93;
 
 type Tx = Prisma.TransactionClient;
-type EmployeeWithSchedule = Prisma.UserGetPayload<{
+export type EmployeeWithSchedule = Prisma.UserGetPayload<{
   include: { workSchedule: true };
 }>;
 
@@ -221,7 +221,43 @@ export class PunchesService {
       return { employee: sheet.employee, totals: sheet.totals };
     });
 
-    return paginated(data, total, query);
+    return { ...paginated(data, total, query), employees };
+  }
+
+  /**
+   * Dias calculados de cada funcionário num período de qualquer tamanho (sem o limite
+   * de 93 dias das consultas): base do banco de horas.
+   */
+  async computeDays(
+    employees: EmployeeWithSchedule[],
+    from: string,
+    to: string,
+  ): Promise<Map<string, TimesheetDay[]>> {
+    const ids = employees.map((e) => e.id);
+    const [punches, holidays, absences, history] = await Promise.all([
+      this.validPunchesInWindow(ids, from, to),
+      this.holidays.byDate(from, to),
+      this.absences.byEmployeeAndDate(ids, from, to),
+      loadScheduleHistory(this.prisma, ids),
+    ]);
+    const now = new Date();
+    return new Map(
+      employees.map((employee) => [
+        employee.id,
+        buildTimesheet({
+          punches: punches.filter((p) => p.userId === employee.id),
+          schedule: employee.workSchedule,
+          scheduleHistory: history.get(employee.id),
+          timezone: this.tz,
+          from,
+          to,
+          now,
+          employeeSince: localDate(employee.createdAt, this.tz),
+          holidays,
+          absences: absences.get(employee.id),
+        }).days,
+      ]),
+    );
   }
 
   /** Painel do dia: situação de cada funcionário ativo agora. */

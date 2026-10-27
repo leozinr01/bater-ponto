@@ -360,6 +360,158 @@ describe('Feriados, abonos, painel do dia e alertas (e2e)', () => {
     });
   });
 
+  describe('banco de horas', () => {
+    it('acumula extras, falta de horas, folgas de banco e ajustes', async () => {
+      // Jornada só de segunda: os outros dias não pesam no saldo
+      const employee = await createEmployee(
+        'Banco',
+        await createSchedule({ workDays: [1] }),
+      );
+      const asEmployee = authHeader(ctx, employee);
+      await ctx.prisma.punchClock.createMany({
+        data: [
+          // 07/09 é feriado (importado acima): nenhuma marcação
+          // 14/09: 2h extras
+          '2026-09-14T08:00',
+          '2026-09-14T12:00',
+          '2026-09-14T13:00',
+          '2026-09-14T19:00',
+          // 21/09: 1h a menos
+          '2026-09-21T08:00',
+          '2026-09-21T12:00',
+          '2026-09-21T13:00',
+          '2026-09-21T16:00',
+          // 05/10: 30 min extras
+          '2026-10-05T08:00',
+          '2026-10-05T12:00',
+          '2026-10-05T13:00',
+          '2026-10-05T17:30',
+        ].map((local) => ({ userId: employee.id, timestamp: br(local) })),
+      });
+      // 28/09 e 12/10 (feriado) sem marcação: 28/09 vira folga de banco (-8h)
+      await ctx
+        .http()
+        .post('/api/absences')
+        .set(asAdmin)
+        .send({
+          employeeId: employee.id,
+          type: 'COMPENSATION',
+          startDate: '2026-09-28',
+          endDate: '2026-09-28',
+          reason: 'Folga compensando extras',
+        })
+        .expect(201);
+      const entry = await ctx
+        .http()
+        .post('/api/hour-bank/entries')
+        .set(asAdmin)
+        .send({
+          employeeId: employee.id,
+          date: '2026-10-10',
+          minutes: 600,
+          reason: 'Crédito acordado com a gestão',
+        });
+      expect(entry.status).toBe(201);
+
+      const bank = await ctx
+        .http()
+        .get('/api/hour-bank?until=2026-10-18')
+        .set(asEmployee);
+      expect(bank.status).toBe(200);
+      expect(bank.body.since).toBe('2026-09-01');
+      expect(bank.body.totals).toEqual({
+        overtimeMinutes: 150,
+        deficitMinutes: 60,
+        compensatedMinutes: 480,
+        adjustmentMinutes: 600,
+        balanceMinutes: 150 - 60 - 480 + 600,
+      });
+      expect(
+        bank.body.months.map((m) => [
+          m.month,
+          m.balanceMinutes,
+          m.accumulatedMinutes,
+        ]),
+      ).toEqual([
+        ['2026-09', 120 - 60 - 480, -420],
+        ['2026-10', 30 + 600, 210],
+      ]);
+
+      // Relatório traz o saldo acumulado até o fim do período
+      const report = await ctx
+        .http()
+        .get(
+          `/api/punches/report?from=2026-10-01&to=2026-10-18&employeeId=${employee.id}`,
+        )
+        .set(asAdmin)
+        .expect(200);
+      expect(report.body.data[0].hourBankMinutes).toBe(210);
+
+      // Ajuste cancelado sai do saldo e continua no extrato
+      await ctx
+        .http()
+        .post(`/api/hour-bank/entries/${entry.body.id}/cancel`)
+        .set(asAdmin)
+        .expect(200);
+      const after = await ctx
+        .http()
+        .get(`/api/hour-bank?employeeId=${employee.id}&until=2026-10-18`)
+        .set(asAdmin)
+        .expect(200);
+      expect(after.body.totals.balanceMinutes).toBe(-390);
+      expect(after.body.entries).toHaveLength(1);
+      expect(after.body.entries[0].canceled).toBe(true);
+    });
+
+    it('protege consultas e ajustes', async () => {
+      const employee = await createEmployee('Banco protegido');
+      const other = await createUser(ctx);
+      const asEmployee = authHeader(ctx, employee);
+
+      const foreign = await ctx
+        .http()
+        .get(`/api/hour-bank?employeeId=${other.id}`)
+        .set(asEmployee);
+      expect(foreign.status).toBe(403);
+
+      const byEmployee = await ctx
+        .http()
+        .post('/api/hour-bank/entries')
+        .set(asEmployee)
+        .send({
+          employeeId: employee.id,
+          date: '2026-10-10',
+          minutes: 60,
+          reason: 'Tentativa do funcionário',
+        });
+      expect(byEmployee.status).toBe(403);
+
+      const self = await ctx
+        .http()
+        .post('/api/hour-bank/entries')
+        .set(asAdmin)
+        .send({
+          employeeId: admin.id,
+          date: '2026-10-10',
+          minutes: 60,
+          reason: 'Ajuste para mim mesmo',
+        });
+      expect(self.status).toBe(403);
+
+      const zero = await ctx
+        .http()
+        .post('/api/hour-bank/entries')
+        .set(asAdmin)
+        .send({
+          employeeId: employee.id,
+          date: '2026-10-10',
+          minutes: 0,
+          reason: 'Ajuste vazio',
+        });
+      expect(zero.status).toBe(400);
+    });
+  });
+
   describe('alertas da CLT', () => {
     it('marca no espelho o intervalo curto e o excesso de horas extras', async () => {
       const employee = await createEmployee('Alertas');

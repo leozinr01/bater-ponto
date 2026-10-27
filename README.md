@@ -19,6 +19,7 @@ Controle de ponto da TAI Project: o funcionário bate o ponto pelo app (PWA inst
 **Funcionário**
 - **Bater ponto:** relógio, botão "Registrar entrada/saída" e o resumo de hoje: horas trabalhadas, progresso da jornada, saída prevista e a linha do tempo das marcações (entrada em verde, saída em vermelho, intervalos).
 - **Registros:** aba **Por dia** com o resumo do mês, a semana clicável (toque num dia para ver os horários) e os dias agrupados por semana; aba **Marcações** com cada marcação e as correções feitas. Imprime no formato de **espelho de ponto**.
+- **Banco de horas:** saldo acumulado desde o cadastro (horas extras − falta de horas − folgas de banco ± ajustes) e extrato mês a mês. O administrador lança ajustes (ex.: horas pagas em folha) e "Folga de banco" como tipo de abono nos Registros; o Relatório mostra o saldo de cada um.
 - **Minha conta:** dados, jornada e troca de senha.
 
 **Administrador** (além do acima)

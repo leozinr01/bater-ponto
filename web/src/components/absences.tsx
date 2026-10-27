@@ -18,6 +18,7 @@ const PLACEHOLDERS: Record<AbsenceType, string> = {
   VACATION: 'Ex: férias do período aquisitivo 2025/2026',
   LEAVE: 'Ex: licença-paternidade',
   ALLOWANCE: 'Ex: dispensa autorizada pela gestão para doação de sangue',
+  COMPENSATION: 'Ex: folga para compensar as horas extras de setembro',
 };
 
 const period = (a: { startDate: string; endDate: string }) =>
@@ -77,7 +78,10 @@ export function AbsenceModal({
         {create.isError && <Alert>{errorMessage(create.error)}</Alert>}
         <div>
           <span className="mb-1.5 block text-[13px] font-medium text-slate-300">Tipo</span>
-          <Segmented value={type} onChange={setType} options={TYPE_OPTIONS} className="flex w-full" />
+          <Segmented value={type} onChange={setType} options={TYPE_OPTIONS} className="flex w-full flex-wrap" />
+          {type === 'COMPENSATION' && (
+            <p className="mt-1.5 text-xs text-slate-500">Não gera falta e desconta a carga do dia do banco de horas.</p>
+          )}
         </div>
         <div className="grid grid-cols-2 gap-3">
           <Field label="De">

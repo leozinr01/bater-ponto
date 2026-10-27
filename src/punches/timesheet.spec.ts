@@ -288,6 +288,7 @@ describe('buildTimesheet', () => {
       deficitMinutes: 60,
       incompleteDays: 0,
       absentDays: 0,
+      compensatedMinutes: 0,
       excusedDays: 0,
       alertDays: 2, // os dois dias passam de 6h sem intervalo
     });
@@ -530,5 +531,32 @@ describe('histórico de jornada', () => {
       ['2026-10-20', 'absent'],
     ]);
     expect(totals.absentDays).toBe(1);
+  });
+});
+
+describe('folga de banco', () => {
+  it('não gera falta e consome a carga do dia do banco de horas', () => {
+    const { days, totals } = build([], {
+      absences: new Map([
+        [
+          '2026-10-19',
+          { type: 'COMPENSATION' as const, reason: 'Folga de banco' },
+        ],
+      ]),
+      holidays: new Map([['2026-10-20', 'Feriado']]),
+      to: '2026-10-20',
+    });
+    expect(days[0]).toMatchObject({
+      status: 'complete',
+      expectedMinutes: 0,
+      compensatedMinutes: 480,
+    });
+    // feriado não consome banco
+    expect(days[1].compensatedMinutes).toBe(0);
+    expect(totals).toMatchObject({
+      compensatedMinutes: 480,
+      absentDays: 0,
+      excusedDays: 1,
+    });
   });
 });

@@ -22,7 +22,7 @@ export class CreateAbsenceDto {
   @ApiProperty({
     enum: AbsenceType,
     description:
-      'MEDICAL = atestado; VACATION = férias; LEAVE = afastamento; ALLOWANCE = abono',
+      'MEDICAL = atestado; VACATION = férias; LEAVE = afastamento; ALLOWANCE = abono; COMPENSATION = folga de banco (consome a carga do dia do banco de horas)',
   })
   @IsEnum(AbsenceType, { message: 'type inválido' })
   type: AbsenceType;

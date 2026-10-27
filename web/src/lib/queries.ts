@@ -10,6 +10,8 @@ import type {
   AbsenceType,
   Employee,
   Holiday,
+  HourBank,
+  HourBankEntry,
   Paginated,
   Punch,
   RegisteredPunch,
@@ -75,7 +77,7 @@ function useInvalidatePunches() {
   const queryClient = useQueryClient();
   return () =>
     Promise.all(
-      ['timesheet', 'punches', 'report', 'today'].map((key) =>
+      ['timesheet', 'punches', 'report', 'today', 'hour-bank'].map((key) =>
         queryClient.invalidateQueries({ queryKey: [key] }),
       ),
     );
@@ -235,7 +237,7 @@ function useInvalidateHolidays() {
   const queryClient = useQueryClient();
   return () =>
     Promise.all(
-      ['holidays', 'timesheet', 'report', 'today'].map((key) =>
+      ['holidays', 'timesheet', 'report', 'today', 'hour-bank'].map((key) =>
         queryClient.invalidateQueries({ queryKey: [key] }),
       ),
     );
@@ -280,7 +282,7 @@ function useInvalidateAbsences() {
   const queryClient = useQueryClient();
   return () =>
     Promise.all(
-      ['absences', 'timesheet', 'report', 'today'].map((key) =>
+      ['absences', 'timesheet', 'report', 'today', 'hour-bank'].map((key) =>
         queryClient.invalidateQueries({ queryKey: [key] }),
       ),
     );
@@ -299,6 +301,38 @@ export function useCancelAbsence() {
   const invalidate = useInvalidateAbsences();
   return useMutation({
     mutationFn: (id: string) => api<Absence>(`/absences/${id}/cancel`, { method: 'POST' }),
+    onSuccess: invalidate,
+  });
+}
+
+// ---- Banco de horas ----
+
+export function useHourBank(params: { employeeId?: string }) {
+  return useQuery({
+    queryKey: ['hour-bank', params],
+    queryFn: () => api<HourBank>('/hour-bank', { query: params }),
+  });
+}
+
+function useInvalidateHourBank() {
+  const queryClient = useQueryClient();
+  return () =>
+    Promise.all(['hour-bank', 'report'].map((key) => queryClient.invalidateQueries({ queryKey: [key] })));
+}
+
+export function useCreateHourBankEntry() {
+  const invalidate = useInvalidateHourBank();
+  return useMutation({
+    mutationFn: (body: { employeeId: string; date: string; minutes: number; reason: string }) =>
+      api<HourBankEntry>('/hour-bank/entries', { method: 'POST', body }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useCancelHourBankEntry() {
+  const invalidate = useInvalidateHourBank();
+  return useMutation({
+    mutationFn: (id: string) => api<HourBankEntry>(`/hour-bank/entries/${id}/cancel`, { method: 'POST' }),
     onSuccess: invalidate,
   });
 }

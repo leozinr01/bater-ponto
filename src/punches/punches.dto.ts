@@ -231,6 +231,8 @@ class TimesheetDayDto {
   @ApiProperty({ nullable: true, type: Number }) lateMinutes: number | null;
   @ApiProperty({ nullable: true, type: Number }) overtimeMinutes: number | null;
   @ApiProperty({ nullable: true, type: Number }) deficitMinutes: number | null;
+  @ApiProperty({ description: 'Carga consumida do banco por folga de banco' })
+  compensatedMinutes: number;
   @ApiProperty({
     enum: ['short_break', 'overtime_limit', 'short_rest'],
     isArray: true,
@@ -246,6 +248,8 @@ class TimesheetTotalsDto {
   @ApiProperty({ nullable: true, type: Number }) lateMinutes: number | null;
   @ApiProperty({ nullable: true, type: Number }) overtimeMinutes: number | null;
   @ApiProperty({ nullable: true, type: Number }) deficitMinutes: number | null;
+  @ApiProperty({ description: 'Carga consumida do banco por folgas de banco' })
+  compensatedMinutes: number;
   @ApiProperty() incompleteDays: number;
   @ApiProperty() absentDays: number;
   @ApiProperty({
@@ -276,6 +280,10 @@ export class TimesheetResponseDto {
 export class ReportItemDto {
   @ApiProperty({ type: TimesheetEmployeeDto }) employee: TimesheetEmployeeDto;
   @ApiProperty({ type: TimesheetTotalsDto }) totals: TimesheetTotalsDto;
+  @ApiProperty({
+    description: 'Saldo do banco de horas acumulado até o fim do período',
+  })
+  hourBankMinutes: number;
 }
 
 const PRESENCE_ENUM = [

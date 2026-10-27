@@ -5,6 +5,7 @@ import { Spinner } from './components/ui';
 import { useAuth } from './lib/auth';
 import { AccountPage } from './pages/AccountPage';
 import { ClockPage } from './pages/ClockPage';
+import { HourBankPage } from './pages/HourBankPage';
 import { LoginPage } from './pages/LoginPage';
 import { RecordsPage } from './pages/RecordsPage';
 import { EmployeesPage } from './pages/admin/EmployeesPage';
@@ -55,6 +56,7 @@ export function App() {
       >
         <Route index element={<ClockPage />} />
         <Route path="registros" element={<RecordsPage />} />
+        <Route path="banco-de-horas" element={<HourBankPage />} />
         <Route path="espelho" element={<RedirectToRecords />} />
         <Route path="historico" element={<RedirectToRecords tab="marcacoes" />} />
         <Route path="conta" element={<AccountPage />} />

@@ -40,8 +40,9 @@ async function exportCsv(from: string, to: string) {
     'Dias incompletos',
     'Dias abonados',
     'Dias com alerta (CLT)',
+    'Banco de horas (acumulado)',
   ];
-  const rows = items.map(({ employee, totals: t }) => [
+  const rows = items.map(({ employee, totals: t, hourBankMinutes }) => [
     employee.name,
     formatMinutes(t.workedMinutes),
     formatMinutes(t.expectedMinutes),
@@ -52,6 +53,7 @@ async function exportCsv(from: string, to: string) {
     t.incompleteDays,
     t.excusedDays,
     t.alertDays,
+    formatMinutes(hourBankMinutes),
   ]);
   const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\r\n');
   const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
@@ -172,6 +174,9 @@ export function ReportPage() {
                       <th className={cn(table.th, 'text-right')}>Trabalhado</th>
                       <th className={cn(table.th, 'text-right')}>Previsto</th>
                       <th className={cn(table.th, 'text-right')}>Saldo</th>
+                      <th className={cn(table.th, 'text-right')} title="Saldo do banco de horas acumulado até o fim do período">
+                        Banco
+                      </th>
                       <th className={cn(table.th, 'text-right')}>Atrasos</th>
                       <th className={cn(table.th, 'text-right')}>Faltas</th>
                       <th
@@ -191,7 +196,7 @@ export function ReportPage() {
                     </tr>
                   </thead>
                   <tbody className={table.tbody}>
-                    {items.map(({ employee, totals: t }) => (
+                    {items.map(({ employee, totals: t, hourBankMinutes }) => (
                       <tr key={employee.id} className={cn(table.tr, 'group')}>
                         <td className={table.td}>
                           <div className="flex items-center gap-3">
@@ -207,6 +212,18 @@ export function ReportPage() {
                         </td>
                         <td className={cn(table.td, 'text-right font-medium tabular-nums')}>
                           <Balance overtime={t.overtimeMinutes} deficit={t.deficitMinutes} />
+                        </td>
+                        <td className={cn(table.td, 'text-right font-semibold tabular-nums')}>
+                          <Link
+                            to={`/banco-de-horas?funcionario=${employee.id}`}
+                            className={cn(
+                              'rounded px-1 hover:underline',
+                              hourBankMinutes > 0 ? 'text-emerald-300' : hourBankMinutes < 0 ? 'text-red-300' : 'text-slate-400',
+                            )}
+                          >
+                            {hourBankMinutes > 0 ? '+' : ''}
+                            {formatMinutes(hourBankMinutes)}
+                          </Link>
                         </td>
                         <td className={cn(table.td, 'text-right tabular-nums')}>
                           {t.lateMinutes ? (

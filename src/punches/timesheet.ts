@@ -18,6 +18,8 @@ import { addDays, localDate, weekday, zonedInstant } from '@/common/time';
  *   o cálculo dos dias anteriores.
  * - Feriado ou abono (atestado, férias, afastamento) num dia de trabalho: não há horas
  *   previstas nem falta; o que for trabalhado conta como extra.
+ * - Folga de banco (abono COMPENSATION) num dia de trabalho: também não gera falta, mas
+ *   consome do banco de horas a carga prevista do dia (compensatedMinutes).
  * - Alertas (CLT) só são avaliados em jornadas completas: intervalo intrajornada
  *   menor que o mínimo (art. 71), mais de 2h extras no dia (art. 59) e menos de 11h
  *   de descanso desde a jornada anterior (art. 66).
@@ -62,7 +64,12 @@ export type DayStatus = 'complete' | 'incomplete' | 'in_progress' | 'absent';
  */
 export type DayAlert = 'short_break' | 'overtime_limit' | 'short_rest';
 
-export type AbsenceType = 'MEDICAL' | 'VACATION' | 'LEAVE' | 'ALLOWANCE';
+export type AbsenceType =
+  | 'MEDICAL'
+  | 'VACATION'
+  | 'LEAVE'
+  | 'ALLOWANCE'
+  | 'COMPENSATION';
 
 export interface DayAbsence {
   type: AbsenceType;
@@ -88,6 +95,8 @@ export interface TimesheetDay {
   lateMinutes: number | null;
   overtimeMinutes: number | null;
   deficitMinutes: number | null;
+  /** Carga do dia consumida do banco de horas por folga de banco. */
+  compensatedMinutes: number;
   alerts: DayAlert[];
 }
 
@@ -97,6 +106,7 @@ export interface TimesheetTotals {
   lateMinutes: number | null;
   overtimeMinutes: number | null;
   deficitMinutes: number | null;
+  compensatedMinutes: number;
   incompleteDays: number;
   absentDays: number;
   /** Dias de trabalho cobertos por abono, atestado, férias ou afastamento. */
@@ -221,6 +231,20 @@ function dayAlerts(
   return alerts;
 }
 
+/** Carga consumida do banco quando a data é folga de banco num dia de trabalho. */
+function compensatedMinutes(
+  schedule: ScheduleInput | null,
+  date: string,
+  holiday: string | null,
+  absence: DayAbsence | null,
+) {
+  return absence?.type === 'COMPENSATION' &&
+    !holiday &&
+    isWorkDay(schedule, date)
+    ? schedule!.dailyMinutes
+    : 0;
+}
+
 function buildDay(
   date: string,
   shifts: PunchInput[][],
@@ -290,6 +314,7 @@ function buildDay(
     lateMinutes,
     overtimeMinutes,
     deficitMinutes,
+    compensatedMinutes: compensatedMinutes(schedule, date, holiday, absence),
     alerts:
       status === 'complete'
         ? dayAlerts(
@@ -365,6 +390,12 @@ export function buildTimesheet(input: BuildTimesheetInput): {
         lateMinutes: null,
         overtimeMinutes: null,
         deficitMinutes: null,
+        compensatedMinutes: compensatedMinutes(
+          schedule,
+          date,
+          holiday,
+          absence,
+        ),
         alerts: [],
       });
     } else if (workDay && date >= employeeSince && date < today) {
@@ -383,6 +414,7 @@ export function buildTimesheet(input: BuildTimesheetInput): {
         lateMinutes: null,
         overtimeMinutes: null,
         deficitMinutes: null,
+        compensatedMinutes: 0,
         alerts: [],
       });
     }
@@ -396,6 +428,10 @@ export function buildTimesheet(input: BuildTimesheetInput): {
       lateMinutes: sumOrNull(days.map((d) => d.lateMinutes)),
       overtimeMinutes: sumOrNull(days.map((d) => d.overtimeMinutes)),
       deficitMinutes: sumOrNull(days.map((d) => d.deficitMinutes)),
+      compensatedMinutes: days.reduce(
+        (sum, d) => sum + d.compensatedMinutes,
+        0,
+      ),
       incompleteDays: days.filter((d) => d.status === 'incomplete').length,
       absentDays: days.filter((d) => d.status === 'absent').length,
       excusedDays: days.filter(

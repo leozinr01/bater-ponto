@@ -1,4 +1,5 @@
-import { CalendarCheck, HeartPulse, Plus } from 'lucide-react';
+import { CalendarCheck, ChevronRight, HeartPulse, PiggyBank, Plus } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useState, type ReactNode } from 'react';
 import { AbsenceModal, AbsencesCard } from '../../components/absences';
 import { AddPunchModal, EditPunchModal } from '../../components/corrections';
@@ -9,7 +10,7 @@ import { WeekStrip } from '../../components/WeekStrip';
 import { errorMessage } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { currentMonth, formatDate, formatMinutes, monthRange, timeOf, today, WEEKDAYS } from '../../lib/format';
-import { useTimesheet } from '../../lib/queries';
+import { useHourBank, useTimesheet } from '../../lib/queries';
 import type { TimesheetDay } from '../../lib/types';
 
 type Filter = 'all' | 'pending' | 'absent' | 'alerts';
@@ -188,6 +189,7 @@ export function DaysView({ employeeId, month }: { employeeId: string; month: str
   const { user, isAdmin } = useAuth();
   const { from, to } = monthRange(month);
   const sheet = useTimesheet({ employeeId: employeeId || undefined, from, to });
+  const bank = useHourBank({ employeeId: employeeId || undefined });
   const data = sheet.data;
   const [filter, setFilter] = useState<Filter>('all');
   const [adding, setAdding] = useState<string | null>(null);
@@ -239,6 +241,29 @@ export function DaysView({ employeeId, month }: { employeeId: string; month: str
             value={<span className={totals.lateMinutes ? 'text-amber-300' : ''}>{formatMinutes(totals.lateMinutes)}</span>}
           />
         </div>
+        {bank.data && (
+          <Link
+            to={`/banco-de-horas${employeeId ? `?funcionario=${employeeId}` : ''}`}
+            className="flex items-center gap-2 border-t border-white/[0.06] px-5 py-2.5 text-xs text-slate-400 transition-colors hover:bg-white/[0.02] hover:text-white"
+          >
+            <PiggyBank className="size-4 text-slate-500" />
+            Banco de horas hoje:
+            <span
+              className={cn(
+                'font-semibold tabular-nums',
+                bank.data.totals.balanceMinutes > 0
+                  ? 'text-emerald-300'
+                  : bank.data.totals.balanceMinutes < 0
+                    ? 'text-red-300'
+                    : 'text-slate-300',
+              )}
+            >
+              {bank.data.totals.balanceMinutes > 0 ? '+' : ''}
+              {formatMinutes(bank.data.totals.balanceMinutes)}
+            </span>
+            <ChevronRight className="ml-auto size-4" />
+          </Link>
+        )}
         {!data.schedule && (
           <p className="border-t border-white/[0.06] px-5 py-2.5 text-xs text-amber-300">
             Sem jornada definida: saldo, atrasos e faltas não são calculados.

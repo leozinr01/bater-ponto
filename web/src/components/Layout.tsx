@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   LayoutGrid,
   LogOut,
+  PiggyBank,
   UserRound,
   Users,
   X,
@@ -31,6 +32,7 @@ interface NavEntry {
 const employeeLinks: NavEntry[] = [
   { to: '/', label: 'Bater ponto', icon: Fingerprint, end: true },
   { to: '/registros', label: 'Registros', icon: ClipboardList },
+  { to: '/banco-de-horas', label: 'Banco de horas', icon: PiggyBank },
 ];
 
 const adminLinks: NavEntry[] = [

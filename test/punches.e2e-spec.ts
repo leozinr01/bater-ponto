@@ -326,6 +326,7 @@ describe('Ponto (e2e)', () => {
         lateMinutes: 30,
         overtimeMinutes: 60,
         deficitMinutes: 60,
+        compensatedMinutes: 0,
         incompleteDays: 1,
         absentDays: 1,
         excusedDays: 0,

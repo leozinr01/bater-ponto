@@ -33,13 +33,17 @@ import {
   TodayResponseDto,
   VoidPunchDto,
 } from './punches.dto';
+import { HourBankService } from '@/hour-bank/hour-bank.service';
 import { PunchesService } from './punches.service';
 
 @ApiTags('Ponto')
 @ApiBearerAuth()
 @Controller('punches')
 export class PunchesController {
-  constructor(private punchesService: PunchesService) {}
+  constructor(
+    private punchesService: PunchesService,
+    private hourBankService: HourBankService,
+  ) {}
 
   @Post()
   @ApiOperation({
@@ -87,8 +91,16 @@ export class PunchesController {
   @Roles(['ADMIN'])
   @ApiOperation({ summary: 'Totais do período por funcionário (admin)' })
   @ApiPaginatedResponse(ReportItemDto)
-  report(@Query() query: ReportQueryDto) {
-    return this.punchesService.report(query);
+  async report(@Query() query: ReportQueryDto) {
+    const { employees, ...page } = await this.punchesService.report(query);
+    const balances = await this.hourBankService.balances(employees, query.to);
+    return {
+      ...page,
+      data: page.data.map((item) => ({
+        ...item,
+        hourBankMinutes: balances.get(item.employee.id) ?? 0,
+      })),
+    };
   }
 
   @Get('today')

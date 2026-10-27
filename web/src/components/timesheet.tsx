@@ -14,6 +14,7 @@ export const absenceLabels: Record<AbsenceType, string> = {
   VACATION: 'Férias',
   LEAVE: 'Afastamento',
   ALLOWANCE: 'Abono',
+  COMPENSATION: 'Folga de banco',
 };
 
 export function DayStatusBadge({ day }: { day: TimesheetDay }) {
