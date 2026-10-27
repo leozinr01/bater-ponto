@@ -572,11 +572,12 @@ describe('Ponto (e2e)', () => {
         .send({ dailyMinutes: 420, lateToleranceMinutes: 30 })
         .expect(200);
 
-      // O passado continua com a jornada da época: ter = 1h extra e 30 min de atraso
+      // O passado continua com a jornada da época: ter (7h30 após a correção) com 8h previstas
       const sheet = await timesheet();
       expect(dayOf(sheet.body, '2026-10-06')).toMatchObject({
         expectedMinutes: 480,
-        overtimeMinutes: 60,
+        overtimeMinutes: 0,
+        deficitMinutes: 30,
         lateMinutes: 30,
       });
       expect(
