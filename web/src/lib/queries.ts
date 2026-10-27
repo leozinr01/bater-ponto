@@ -6,6 +6,8 @@ import {
 } from '@tanstack/react-query';
 import { api } from './api';
 import type {
+  Absence,
+  AbsenceType,
   Employee,
   Holiday,
   Paginated,
@@ -260,6 +262,43 @@ export function useImportNationalHolidays() {
   return useMutation({
     mutationFn: (year: number) =>
       api<{ created: number; skipped: number }>('/holidays/national', { method: 'POST', query: { year } }),
+    onSuccess: invalidate,
+  });
+}
+
+// ---- Abonos ----
+
+export function useAbsences(params: { employeeId?: string; from: string; to: string }) {
+  return useQuery({
+    queryKey: ['absences', params],
+    queryFn: () => api<Absence[]>('/absences', { query: params }),
+  });
+}
+
+/** Abonos mudam faltas e saldos: invalida os cálculos junto. */
+function useInvalidateAbsences() {
+  const queryClient = useQueryClient();
+  return () =>
+    Promise.all(
+      ['absences', 'timesheet', 'report', 'today'].map((key) =>
+        queryClient.invalidateQueries({ queryKey: [key] }),
+      ),
+    );
+}
+
+export function useCreateAbsence() {
+  const invalidate = useInvalidateAbsences();
+  return useMutation({
+    mutationFn: (body: { employeeId: string; type: AbsenceType; startDate: string; endDate: string; reason: string }) =>
+      api<Absence>('/absences', { method: 'POST', body }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useCancelAbsence() {
+  const invalidate = useInvalidateAbsences();
+  return useMutation({
+    mutationFn: (id: string) => api<Absence>(`/absences/${id}/cancel`, { method: 'POST' }),
     onSuccess: invalidate,
   });
 }

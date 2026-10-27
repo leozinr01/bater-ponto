@@ -30,10 +30,13 @@ model User {
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime? @updatedAt @map("updated_at")
 
-  workSchedule   WorkSchedule? @relation(fields: [workScheduleId], references: [id])
-  punchClocks    PunchClock[]  @relation("PunchOwner")
-  createdPunches PunchClock[]  @relation("PunchCreatedBy")
-  voidedPunches  PunchClock[]  @relation("PunchVoidedBy")
+  workSchedule     WorkSchedule? @relation(fields: [workScheduleId], references: [id])
+  punchClocks      PunchClock[]  @relation("PunchOwner")
+  createdPunches   PunchClock[]  @relation("PunchCreatedBy")
+  voidedPunches    PunchClock[]  @relation("PunchVoidedBy")
+  absences         Absence[]     @relation("AbsenceOwner")
+  createdAbsences  Absence[]     @relation("AbsenceCreatedBy")
+  canceledAbsences Absence[]     @relation("AbsenceCanceledBy")
 
   @@map("users")
 }
@@ -70,6 +73,38 @@ model Holiday {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("holidays")
+}
+
+enum AbsenceType {
+  MEDICAL
+  VACATION
+  LEAVE
+  ALLOWANCE
+}
+
+/// Abono, atestado, férias ou afastamento de dias inteiros. Nos dias de trabalho
+/// cobertos não há horas previstas nem falta. Nunca é apagado: o cancelamento fica registrado.
+model Absence {
+  id        String      @id @default(uuid())
+  userId    String      @map("user_id")
+  type      AbsenceType
+  /// Período inclusivo, datas locais (YYYY-MM-DD, no fuso APP_TIMEZONE).
+  startDate String      @map("start_date")
+  endDate   String      @map("end_date")
+  reason    String
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  createdById String   @map("created_by_id")
+
+  canceledAt   DateTime? @map("canceled_at")
+  canceledById String?   @map("canceled_by_id")
+
+  user       User  @relation("AbsenceOwner", fields: [userId], references: [id])
+  createdBy  User  @relation("AbsenceCreatedBy", fields: [createdById], references: [id])
+  canceledBy User? @relation("AbsenceCanceledBy", fields: [canceledById], references: [id])
+
+  @@index([userId, startDate])
+  @@map("absences")
 }
 
 enum PunchSource {

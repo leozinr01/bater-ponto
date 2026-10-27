@@ -211,6 +211,13 @@ class TimesheetDayDto {
   @ApiProperty({ nullable: true, type: String, description: 'Nome do feriado' })
   holiday: string | null;
   @ApiProperty({
+    nullable: true,
+    type: Object,
+    example: { type: 'MEDICAL', reason: 'Atestado de 1 dia' },
+    description: 'Abono, atestado, férias ou afastamento que cobre a data',
+  })
+  absence: { type: string; reason: string } | null;
+  @ApiProperty({
     enum: ['complete', 'incomplete', 'in_progress', 'absent'],
     description:
       'incomplete = marcação faltando (não inventamos horários; extra/falta só após correção)',
@@ -241,6 +248,11 @@ class TimesheetTotalsDto {
   @ApiProperty({ nullable: true, type: Number }) deficitMinutes: number | null;
   @ApiProperty() incompleteDays: number;
   @ApiProperty() absentDays: number;
+  @ApiProperty({
+    description:
+      'Dias de trabalho cobertos por abono, atestado, férias ou afastamento',
+  })
+  excusedDays: number;
   @ApiProperty({ description: 'Dias com pelo menos um alerta' })
   alertDays: number;
 }
@@ -273,6 +285,7 @@ const PRESENCE_ENUM = [
   'late',
   'not_started',
   'day_off',
+  'away',
 ];
 
 class TodayEmployeeDto {
@@ -282,6 +295,12 @@ class TodayEmployeeDto {
   expectedStart: string | null;
   @ApiProperty({ nullable: true, type: Number }) expectedMinutes: number | null;
   @ApiProperty({ enum: PRESENCE_ENUM }) status: string;
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    enum: ['MEDICAL', 'VACATION', 'LEAVE', 'ALLOWANCE'],
+  })
+  absenceType: string | null;
   @ApiProperty({ nullable: true, type: String }) firstPunch: string | null;
   @ApiProperty({ nullable: true, type: String }) lastPunch: string | null;
   @ApiProperty({

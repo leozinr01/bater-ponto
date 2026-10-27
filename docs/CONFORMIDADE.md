@@ -52,7 +52,7 @@ Itens que, pelo que conhecemos da Portaria 671, são exigidos de um REP-P e prec
 | Intervalo intrajornada mínimo (1h para jornadas > 6h; 15 min entre 4h e 6h) | CLT art. 71 | Intervalos são calculados e dias abaixo do mínimo recebem **alerta** |
 | Interjornada mínima de 11h | CLT art. 66 | Dias com menos de 11h de descanso desde a jornada anterior recebem **alerta** |
 | Descanso semanal remunerado, feriados nacionais/locais | Lei 605/1949 | Feriados cadastrados (com importação dos nacionais) não geram falta, e o trabalho neles conta como extra. Feriados estaduais e municipais precisam ser cadastrados à mão. DSR não é calculado |
-| Férias, atestados, afastamentos, abonos | CLT e normas diversas | Não implementado. Hoje só é possível corrigir marcações, não abonar ausências |
+| Férias, atestados, afastamentos, abonos | CLT e normas diversas | Lançamento de dias inteiros com justificativa e histórico de cancelamento. Não há abono de horas parciais (ex.: atestado de 2h), controle de período aquisitivo de férias nem integração com folha |
 | Escalas (12x36, revezamento), jornadas diferentes por dia da semana | CLT art. 59-A e acordos | A jornada tem um único horário e carga para todos os dias de trabalho |
 | Histórico de jornada | — | O espelho usa a jornada **atual** do funcionário, inclusive para períodos passados. Mudar uma jornada altera o cálculo retroativo |
 | Convenção coletiva da categoria | — | Pode trazer tolerâncias, adicionais e regras próprias que precisam ser parametrizadas |
@@ -67,6 +67,6 @@ Itens que, pelo que conhecemos da Portaria 671, são exigidos de um REP-P e prec
 
 1. Decidir a modalidade (REP-P ou REP-A) com o jurídico e verificar a convenção coletiva aplicável.
 2. Modelar empresa/estabelecimento e CPF do trabalhador; adicionar NSR.
-3. Implementar abonos/afastamentos e histórico de jornada (correções de cálculo com maior impacto prático).
+3. Implementar histórico de jornada e abono de horas parciais (correções de cálculo com maior impacto prático).
 4. Implementar adicional noturno/hora reduzida e o cálculo do adicional de horas extras.
 5. Se for REP-P: comprovante assinado, AFD/AEJ no leiaute oficial com assinatura ICP-Brasil, registro no INPI e atestado técnico.

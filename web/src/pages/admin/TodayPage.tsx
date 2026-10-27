@@ -1,7 +1,8 @@
-import { AlarmClock, ArrowRight, Coffee, LayoutDashboard, LogOut, Moon, RefreshCw, Timer, Users } from 'lucide-react';
+import { AlarmClock, ArrowRight, Coffee, HeartPulse, LayoutDashboard, LogOut, Moon, RefreshCw, Timer, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Alert, Avatar, Badge, Button, Card, cn, EmptyState, Loading, PageHeader, type Icon } from '../../components/ui';
+import { absenceLabels } from '../../components/timesheet';
 import { errorMessage } from '../../lib/api';
 import { formatDate, formatMinutes, timeOf, WEEKDAYS } from '../../lib/format';
 import { useToday } from '../../lib/queries';
@@ -17,6 +18,7 @@ const presence: Record<
   not_started: { label: 'Ainda não chegou', tone: 'gray', icon: Users, order: 3 },
   finished: { label: 'Encerrou o dia', tone: 'blue', icon: LogOut, order: 4 },
   day_off: { label: 'Folga', tone: 'gray', icon: Moon, order: 5 },
+  away: { label: 'Afastado', tone: 'blue', icon: HeartPulse, order: 6 },
 };
 
 /** Relógio que avança a cada 30 s, para o tempo trabalhado correr na tela. */
@@ -98,7 +100,7 @@ function EmployeeRow({ item, now }: { item: TodayEmployee; now: number }) {
 
       <div className="flex basis-40 items-center gap-2">
         <Badge tone={tone} dot>
-          {label}
+          {item.absenceType ? absenceLabels[item.absenceType] : label}
         </Badge>
         {item.lateMinutes ? <span className="text-[11px] text-amber-300">+{formatMinutes(item.lateMinutes)}</span> : null}
       </div>
@@ -149,7 +151,7 @@ function EmployeeRow({ item, now }: { item: TodayEmployee; now: number }) {
   );
 }
 
-const STAT_ORDER: PresenceStatus[] = ['working', 'on_break', 'late', 'not_started', 'finished', 'day_off'];
+const STAT_ORDER: PresenceStatus[] = ['working', 'on_break', 'late', 'not_started', 'finished', 'day_off', 'away'];
 
 export function TodayPage() {
   const today = useToday();
@@ -161,7 +163,7 @@ export function TodayPage() {
     .filter((i) => !filter || i.status === filter)
     .sort((a, b) => presence[a.status].order - presence[b.status].order || a.employee.name.localeCompare(b.employee.name));
   const present = data ? data.counts.working + data.counts.on_break : 0;
-  const expected = data ? data.employees.filter((i) => i.status !== 'day_off').length : 0;
+  const expected = data ? data.employees.filter((i) => i.status !== 'day_off' && i.status !== 'away').length : 0;
 
   return (
     <>
@@ -188,7 +190,7 @@ export function TodayPage() {
         <div className="space-y-6">
           {data.holiday && <Alert tone="info">Hoje é feriado: {data.holiday}.</Alert>}
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7">
             {STAT_ORDER.map((status) => (
               <StatButton
                 key={status}

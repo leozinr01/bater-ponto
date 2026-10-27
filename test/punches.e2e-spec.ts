@@ -328,6 +328,7 @@ describe('Ponto (e2e)', () => {
         deficitMinutes: 60,
         incompleteDays: 1,
         absentDays: 1,
+        excusedDays: 0,
         alertDays: 0,
       });
     });

@@ -1,5 +1,5 @@
 import { formatMinutes } from '../lib/format';
-import type { DayAlert, DayStatus, TimesheetDay } from '../lib/types';
+import type { AbsenceType, DayAlert, DayStatus, TimesheetDay } from '../lib/types';
 import { Badge } from './ui';
 
 const statusMap: Record<DayStatus, { label: string; tone: 'green' | 'amber' | 'red' | 'blue' }> = {
@@ -9,7 +9,21 @@ const statusMap: Record<DayStatus, { label: string; tone: 'green' | 'amber' | 'r
   absent: { label: 'Falta', tone: 'red' },
 };
 
+export const absenceLabels: Record<AbsenceType, string> = {
+  MEDICAL: 'Atestado',
+  VACATION: 'Férias',
+  LEAVE: 'Afastamento',
+  ALLOWANCE: 'Abono',
+};
+
 export function DayStatusBadge({ day }: { day: TimesheetDay }) {
+  if (day.absence && day.punches.length === 0) {
+    return (
+      <Badge tone="blue" dot>
+        {absenceLabels[day.absence.type]}
+      </Badge>
+    );
+  }
   if (day.holiday && day.punches.length === 0) {
     return (
       <Badge tone="brand" dot>

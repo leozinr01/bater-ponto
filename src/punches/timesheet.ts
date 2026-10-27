@@ -14,8 +14,8 @@ import { addDays, localDate, weekday, zonedInstant } from '@/common/time';
  * - Jornadas com número ímpar de marcações ficam "incomplete": nenhum horário é
  *   inventado, só os pares completos contam como trabalhados, e extra/falta não é
  *   calculado até que a marcação faltante seja corrigida.
- * - Feriado num dia de trabalho: não há horas previstas nem falta; o que for trabalhado
- *   conta como extra.
+ * - Feriado ou abono (atestado, férias, afastamento) num dia de trabalho: não há horas
+ *   previstas nem falta; o que for trabalhado conta como extra.
  * - Alertas (CLT) só são avaliados em jornadas completas: intervalo intrajornada
  *   menor que o mínimo (art. 71), mais de 2h extras no dia (art. 59) e menos de 11h
  *   de descanso desde a jornada anterior (art. 66).
@@ -54,13 +54,22 @@ export type DayStatus = 'complete' | 'incomplete' | 'in_progress' | 'absent';
  */
 export type DayAlert = 'short_break' | 'overtime_limit' | 'short_rest';
 
+export type AbsenceType = 'MEDICAL' | 'VACATION' | 'LEAVE' | 'ALLOWANCE';
+
+export interface DayAbsence {
+  type: AbsenceType;
+  reason: string;
+}
+
 export interface TimesheetDay {
   date: string;
   weekday: number;
-  /** Dia de trabalho pela jornada (falso em feriados). */
+  /** Dia de trabalho pela jornada (falso em feriados e dias abonados). */
   scheduled: boolean;
   /** Nome do feriado, quando a data é feriado. */
   holiday: string | null;
+  /** Abono que cobre a data. */
+  absence: DayAbsence | null;
   status: DayStatus;
   punches: PunchInput[];
   periods: WorkPeriod[];
@@ -82,6 +91,8 @@ export interface TimesheetTotals {
   deficitMinutes: number | null;
   incompleteDays: number;
   absentDays: number;
+  /** Dias de trabalho cobertos por abono, atestado, férias ou afastamento. */
+  excusedDays: number;
   /** Dias com pelo menos um alerta. */
   alertDays: number;
 }
@@ -98,6 +109,8 @@ export interface BuildTimesheetInput {
   employeeSince: string;
   /** Feriados por data local (YYYY-MM-DD -> nome). */
   holidays?: Map<string, string>;
+  /** Abonos por data local. */
+  absences?: Map<string, DayAbsence>;
 }
 
 /** Marcações valem com precisão de minuto: os segundos são desconsiderados. */
@@ -191,7 +204,8 @@ function buildDay(
 ): TimesheetDay {
   const { timezone, now } = input;
   const holiday = input.holidays?.get(date) ?? null;
-  const scheduled = isWorkDay(schedule, date) && !holiday;
+  const absence = input.absences?.get(date) ?? null;
+  const scheduled = isWorkDay(schedule, date) && !holiday && !absence;
   const expectedMinutes = schedule
     ? scheduled
       ? schedule.dailyMinutes
@@ -240,6 +254,7 @@ function buildDay(
     weekday: weekday(date),
     scheduled,
     holiday,
+    absence,
     status,
     punches,
     periods,
@@ -298,13 +313,15 @@ export function buildTimesheet(input: BuildTimesheetInput): {
     }
 
     const holiday = input.holidays?.get(date) ?? null;
+    const absence = input.absences?.get(date) ?? null;
     const workDay = isWorkDay(schedule, date);
-    if (holiday && workDay) {
+    if ((holiday || absence) && workDay) {
       days.push({
         date,
         weekday: weekday(date),
         scheduled: false,
         holiday,
+        absence,
         status: 'complete',
         punches: [],
         periods: [],
@@ -322,6 +339,7 @@ export function buildTimesheet(input: BuildTimesheetInput): {
         weekday: weekday(date),
         scheduled: true,
         holiday: null,
+        absence: null,
         status: 'absent',
         punches: [],
         periods: [],
@@ -346,6 +364,9 @@ export function buildTimesheet(input: BuildTimesheetInput): {
       deficitMinutes: sumOrNull(days.map((d) => d.deficitMinutes)),
       incompleteDays: days.filter((d) => d.status === 'incomplete').length,
       absentDays: days.filter((d) => d.status === 'absent').length,
+      excusedDays: days.filter(
+        (d) => d.absence && !d.holiday && isWorkDay(schedule, d.date),
+      ).length,
       alertDays: days.filter((d) => d.alerts.length > 0).length,
     },
   };

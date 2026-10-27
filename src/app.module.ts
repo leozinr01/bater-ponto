@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { AbsencesModule } from './absences/absences.module';
 import { AuthModule } from './auth/auth.module';
 import { EmployeesModule } from './employees/employees.module';
 import { HolidaysModule } from './holidays/holidays.module';
@@ -19,6 +20,7 @@ import { WorkSchedulesModule } from './work-schedules/work-schedules.module';
     EmployeesModule,
     WorkSchedulesModule,
     HolidaysModule,
+    AbsencesModule,
     PunchesModule,
   ],
 })

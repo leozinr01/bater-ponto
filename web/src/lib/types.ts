@@ -64,11 +64,15 @@ export type DayStatus = 'complete' | 'incomplete' | 'in_progress' | 'absent';
 /** Alertas da CLT: intervalo curto (art. 71), mais de 2h extras (art. 59), descanso < 11h (art. 66). */
 export type DayAlert = 'short_break' | 'overtime_limit' | 'short_rest';
 
+/** MEDICAL = atestado; VACATION = férias; LEAVE = afastamento; ALLOWANCE = abono. */
+export type AbsenceType = 'MEDICAL' | 'VACATION' | 'LEAVE' | 'ALLOWANCE';
+
 export interface TimesheetDay {
   date: string;
   weekday: number;
   scheduled: boolean;
   holiday: string | null;
+  absence: { type: AbsenceType; reason: string } | null;
   status: DayStatus;
   punches: { id: string; timestamp: string; localTime: string }[];
   periods: { start: string; end: string | null; minutes: number }[];
@@ -89,6 +93,7 @@ export interface TimesheetTotals {
   deficitMinutes: number | null;
   incompleteDays: number;
   absentDays: number;
+  excusedDays: number;
   alertDays: number;
 }
 
@@ -114,7 +119,7 @@ export interface Holiday {
   createdAt: string;
 }
 
-export type PresenceStatus = 'working' | 'on_break' | 'finished' | 'late' | 'not_started' | 'day_off';
+export type PresenceStatus = 'working' | 'on_break' | 'finished' | 'late' | 'not_started' | 'day_off' | 'away';
 
 export interface TodayEmployee {
   employee: { id: string; name: string };
@@ -122,6 +127,7 @@ export interface TodayEmployee {
   expectedStart: string | null;
   expectedMinutes: number | null;
   status: PresenceStatus;
+  absenceType: AbsenceType | null;
   firstPunch: string | null;
   lastPunch: string | null;
   /** Início do período em aberto: o tempo corrido soma a workedMinutes. */
@@ -137,4 +143,19 @@ export interface TodayOverview {
   holiday: string | null;
   counts: Record<PresenceStatus, number>;
   employees: TodayEmployee[];
+}
+
+export interface Absence {
+  id: string;
+  employeeId: string;
+  type: AbsenceType;
+  startDate: string;
+  endDate: string;
+  reason: string;
+  createdAt: string;
+  createdById: string;
+  createdByName: string | null;
+  canceled: boolean;
+  canceledAt: string | null;
+  canceledById: string | null;
 }

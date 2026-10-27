@@ -1,3 +1,4 @@
+import { AbsencesService } from '@/absences/absences.service';
 import { AuthUser } from '@/auth/decorators';
 import { paginated, toPrismaPage } from '@/common/pagination';
 import { HolidaysService } from '@/holidays/holidays.service';
@@ -29,6 +30,7 @@ import {
   buildTimesheet,
   groupIntoShifts,
   MAX_BREAK_MINUTES,
+  DayAbsence,
   MAX_WORK_PERIOD_MINUTES,
   TimesheetDay,
 } from './timesheet';
@@ -46,7 +48,8 @@ type EmployeeWithSchedule = Prisma.UserGetPayload<{
  * Situação do funcionário agora:
  * working = jornada aberta; on_break = saiu, mas ainda não cumpriu a carga do dia;
  * finished = encerrou o dia; late = dia de trabalho, passou do horário + tolerância e não chegou;
- * not_started = ainda dentro do horário (ou sem jornada); day_off = folga ou feriado.
+ * not_started = ainda dentro do horário (ou sem jornada); day_off = folga ou feriado;
+ * away = atestado, férias, afastamento ou abono.
  */
 export const PRESENCE_STATUSES = [
   'working',
@@ -55,6 +58,7 @@ export const PRESENCE_STATUSES = [
   'late',
   'not_started',
   'day_off',
+  'away',
 ] as const;
 export type PresenceStatus = (typeof PRESENCE_STATUSES)[number];
 
@@ -65,6 +69,7 @@ export class PunchesService {
   constructor(
     private prisma: PrismaService,
     private holidays: HolidaysService,
+    private absences: AbsencesService,
     env: EnvService,
   ) {
     this.tz = env.get('APP_TIMEZONE');
@@ -160,9 +165,10 @@ export class PunchesService {
     });
     if (!employee) throw new NotFoundException('Funcionário não encontrado');
 
-    const [punches, holidays] = await Promise.all([
+    const [punches, holidays, absences] = await Promise.all([
       this.validPunchesInWindow([employeeId], query.from, query.to),
       this.holidays.byDate(query.from, query.to),
+      this.absences.byEmployeeAndDate([employeeId], query.from, query.to),
     ]);
     return this.buildEmployeeTimesheet(
       employee,
@@ -170,6 +176,7 @@ export class PunchesService {
       query.from,
       query.to,
       holidays,
+      absences.get(employeeId),
     );
   }
 
@@ -189,13 +196,11 @@ export class PunchesService {
       this.prisma.user.count({ where }),
     ]);
 
-    const [punches, holidays] = await Promise.all([
-      this.validPunchesInWindow(
-        employees.map((e) => e.id),
-        query.from,
-        query.to,
-      ),
+    const ids = employees.map((e) => e.id);
+    const [punches, holidays, absences] = await Promise.all([
+      this.validPunchesInWindow(ids, query.from, query.to),
       this.holidays.byDate(query.from, query.to),
+      this.absences.byEmployeeAndDate(ids, query.from, query.to),
     ]);
 
     const data = employees.map((employee) => {
@@ -205,6 +210,7 @@ export class PunchesService {
         query.from,
         query.to,
         holidays,
+        absences.get(employee.id),
       );
       return { employee: sheet.employee, totals: sheet.totals };
     });
@@ -223,13 +229,11 @@ export class PunchesService {
       include: { workSchedule: true },
       orderBy: [{ name: 'asc' }, { id: 'asc' }],
     });
-    const [punches, holidays] = await Promise.all([
-      this.validPunchesInWindow(
-        employees.map((e) => e.id),
-        yesterday,
-        today,
-      ),
+    const ids = employees.map((e) => e.id);
+    const [punches, holidays, absences] = await Promise.all([
+      this.validPunchesInWindow(ids, yesterday, today),
       this.holidays.byDate(yesterday, today),
+      this.absences.byEmployeeAndDate(ids, yesterday, today),
     ]);
     const holiday = holidays.get(today) ?? null;
 
@@ -243,6 +247,7 @@ export class PunchesService {
         now,
         employeeSince: localDate(employee.createdAt, this.tz),
         holidays,
+        absences: absences.get(employee.id),
       });
       // Jornada noturna iniciada ontem e ainda aberta conta como o "hoje" dela
       const day =
@@ -257,7 +262,15 @@ export class PunchesService {
         scheduleName: employee.workSchedule?.name ?? null,
         expectedStart: employee.workSchedule?.startTime ?? null,
         expectedMinutes: day?.expectedMinutes ?? null,
-        status: this.presence(employee, day, holiday, today, now),
+        status: this.presence(
+          employee,
+          day,
+          holiday,
+          absences.get(employee.id)?.get(today),
+          today,
+          now,
+        ),
+        absenceType: absences.get(employee.id)?.get(today)?.type ?? null,
         firstPunch: first ? localDateTime(first.timestamp, this.tz) : null,
         lastPunch: last ? localDateTime(last.timestamp, this.tz) : null,
         /** Início do período em aberto: a tela soma o tempo corrido a workedMinutes. */
@@ -288,6 +301,7 @@ export class PunchesService {
     employee: EmployeeWithSchedule,
     day: TimesheetDay | undefined,
     holiday: string | null,
+    absence: DayAbsence | undefined,
     today: string,
     now: Date,
   ): PresenceStatus {
@@ -305,6 +319,7 @@ export class PunchesService {
         : 'finished';
     }
 
+    if (absence) return 'away';
     const schedule = employee.workSchedule;
     if (!schedule) return 'not_started';
     if (holiday || !schedule.workDays.includes(weekday(today)))
@@ -401,6 +416,7 @@ export class PunchesService {
     from: string,
     to: string,
     holidays: Map<string, string>,
+    absences?: Map<string, DayAbsence>,
   ) {
     const schedule = employee.workSchedule;
     const { days, totals } = buildTimesheet({
@@ -412,6 +428,7 @@ export class PunchesService {
       now: new Date(),
       employeeSince: localDate(employee.createdAt, this.tz),
       holidays,
+      absences,
     });
 
     return {

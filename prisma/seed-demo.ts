@@ -1,7 +1,8 @@
 /**
  * Dados de demonstração: duas jornadas, feriados nacionais, 8 funcionários fictícios
  * (e-mails @demo.local, senha demo1234) e ~2 meses de marcações com perfis variados:
- * pontual, atrasos, horas extras, marcação esquecida, faltas e intervalo curto.
+ * pontual, atrasos, horas extras, marcação esquecida, faltas, intervalo curto,
+ * férias e atestado (lançados em nome do primeiro administrador, se houver).
  * As marcações de hoje vão só até a hora atual, então o painel "Hoje" fica movimentado.
  *
  * Use num banco de desenvolvimento ou de apresentação, NUNCA no banco de produção:
@@ -29,14 +30,35 @@ interface Profile {
   forget?: number;
   absent?: number;
   shortBreak?: number;
+  /** Afastamento em dias contados a partir de hoje (ex: [-25, -21]). */
+  absence?: {
+    type: 'MEDICAL' | 'VACATION';
+    days: [number, number];
+    reason: string;
+  };
 }
 
 const PROFILES: Profile[] = [
   { name: 'Ana Souza', schedule: 'full' },
   { name: 'Bruno Lima', schedule: 'full', late: 0.35 },
   { name: 'Carla Mendes', schedule: 'full', overtime: 0.45 },
-  { name: 'Diego Rocha', schedule: 'full', forget: 0.08, late: 0.1 },
-  { name: 'Eduarda Alves', schedule: 'full', absent: 0.06 },
+  {
+    name: 'Diego Rocha',
+    schedule: 'full',
+    forget: 0.08,
+    late: 0.1,
+    absence: {
+      type: 'MEDICAL',
+      days: [-9, -8],
+      reason: 'Atestado médico de 2 dias',
+    },
+  },
+  {
+    name: 'Eduarda Alves',
+    schedule: 'full',
+    absent: 0.06,
+    absence: { type: 'VACATION', days: [-26, -17], reason: 'Férias (10 dias)' },
+  },
   { name: 'Felipe Costa', schedule: 'full', shortBreak: 0.3, overtime: 0.15 },
   { name: 'Gabriela Nunes', schedule: 'part', late: 0.1 },
   { name: 'Henrique Dias', schedule: 'part', absent: 0.04, forget: 0.04 },
@@ -148,6 +170,10 @@ async function main() {
     });
 
     const password = await hash(PASSWORD, 10);
+    const admin = await prisma.user.findFirst({
+      where: { role: 'ADMIN' },
+      orderBy: { createdAt: 'asc' },
+    });
     let totalPunches = 0;
 
     for (const profile of PROFILES) {
@@ -162,9 +188,30 @@ async function main() {
         },
       });
 
+      const absence = admin && profile.absence;
+      const away = absence
+        ? {
+            start: addDays(today, absence.days[0]),
+            end: addDays(today, absence.days[1]),
+          }
+        : null;
+      if (absence && away) {
+        await prisma.absence.create({
+          data: {
+            userId: user.id,
+            type: absence.type,
+            startDate: away.start,
+            endDate: away.end,
+            reason: absence.reason,
+            createdById: admin.id,
+          },
+        });
+      }
+
       const punches: Date[] = [];
       for (let date = firstDay; date <= today; date = addDays(date, 1)) {
         if ([0, 6].includes(weekday(date)) || holidays.has(date)) continue;
+        if (away && date >= away.start && date <= away.end) continue;
         if (chance(profile.absent)) continue;
 
         let times = dayPunches(profile).map((m) => at(date, m));

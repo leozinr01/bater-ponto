@@ -1,9 +1,10 @@
-import { CalendarCheck, Plus } from 'lucide-react';
+import { CalendarCheck, HeartPulse, Plus } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
+import { AbsenceModal, AbsencesCard } from '../../components/absences';
 import { AddPunchModal, EditPunchModal } from '../../components/corrections';
 import { PeriodPairs, type PunchRef } from '../../components/DayPeriods';
 import { alertLabels, Balance, DayAlerts, DayStatusBadge } from '../../components/timesheet';
-import { Alert, Badge, Card, cn, EmptyState, Loading, Segmented } from '../../components/ui';
+import { Alert, Badge, Button, Card, cn, EmptyState, Loading, Segmented } from '../../components/ui';
 import { WeekStrip } from '../../components/WeekStrip';
 import { errorMessage } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
@@ -33,7 +34,7 @@ function groupByWeek(days: TimesheetDay[]) {
   return weeks;
 }
 
-const isOff = (d: TimesheetDay) => !d.scheduled && !d.holiday && d.punches.length === 0;
+const isOff = (d: TimesheetDay) => !d.scheduled && !d.holiday && !d.absence && d.punches.length === 0;
 
 function SummaryItem({ label, value, hint }: { label: string; value: ReactNode; hint?: string }) {
   return (
@@ -52,12 +53,14 @@ function DayRow({
   canCorrect,
   onEdit,
   onAdd,
+  onExcuse,
 }: {
   day: TimesheetDay;
   isToday: boolean;
   canCorrect: boolean;
   onEdit: (p: PunchRef) => void;
   onAdd: () => void;
+  onExcuse: () => void;
 }) {
   const showStatus = day.status !== 'complete' || day.punches.length === 0;
   return (
@@ -90,7 +93,13 @@ function DayRow({
         {showStatus && (
           <span className="flex items-center gap-2">
             <DayStatusBadge day={day} />
-            {day.holiday && !day.punches.length && <span className="text-[11px] text-slate-400">{day.holiday}</span>}
+            {day.absence && !day.punches.length ? (
+              <span className="max-w-56 truncate text-[11px] text-slate-400" title={day.absence.reason}>
+                {day.absence.reason}
+              </span>
+            ) : (
+              day.holiday && !day.punches.length && <span className="text-[11px] text-slate-400">{day.holiday}</span>
+            )}
             {day.lateMinutes ? <span className="text-[11px] text-amber-300">Atraso {formatMinutes(day.lateMinutes)}</span> : null}
           </span>
         )}
@@ -106,6 +115,17 @@ function DayRow({
             className="flex size-7 items-center justify-center rounded-lg text-slate-500 opacity-60 ring-1 ring-white/10 ring-inset transition hover:bg-brand-500/15 hover:text-brand-200 hover:ring-brand-400/40 group-hover:opacity-100"
           >
             <Plus className="size-3.5" />
+          </button>
+        )}
+        {canCorrect && day.status === 'absent' && (
+          <button
+            type="button"
+            onClick={onExcuse}
+            title="Lançar atestado, férias ou abono"
+            className="flex h-7 items-center gap-1 rounded-lg px-2 text-[11px] font-medium text-sky-300 opacity-70 ring-1 ring-sky-400/25 ring-inset transition hover:bg-sky-500/10 group-hover:opacity-100"
+          >
+            <HeartPulse className="size-3.5" />
+            Abonar
           </button>
         )}
       </div>
@@ -154,6 +174,7 @@ function PrintTable({ days }: { days: TimesheetDay[] }) {
             </td>
             <td className="py-1">
               {d.holiday ? `Feriado: ${d.holiday}` : <DayStatusBadge day={d} />}
+              {d.absence && ` · ${d.absence.reason}`}
               {d.alerts.length > 0 && ` · ${d.alerts.map((a) => alertLabels[a].label).join(', ')}`}
             </td>
           </tr>
@@ -171,6 +192,7 @@ export function DaysView({ employeeId, month }: { employeeId: string; month: str
   const [filter, setFilter] = useState<Filter>('all');
   const [adding, setAdding] = useState<string | null>(null);
   const [editing, setEditing] = useState<PunchRef | null>(null);
+  const [excusing, setExcusing] = useState<string | null>(null);
 
   if (sheet.isPending) return <Loading rows={10} />;
   if (sheet.isError) return <Alert>{errorMessage(sheet.error)}</Alert>;
@@ -224,6 +246,8 @@ export function DaysView({ employeeId, month }: { employeeId: string; month: str
         )}
       </Card>
 
+      <AbsencesCard employeeId={employeeId || undefined} from={from} to={to} canManage={canCorrect} />
+
       {month === currentMonth() && (
         <div className="print:hidden">
           <WeekStrip days={data.days} todayDate={todayDate} />
@@ -233,7 +257,14 @@ export function DaysView({ employeeId, month }: { employeeId: string; month: str
       {/* Lista de dias, agrupada por semana */}
       <div className="print:hidden">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold text-white">Dias</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-sm font-semibold text-white">Dias</h2>
+            {canCorrect && (
+              <Button size="sm" variant="secondary" icon={HeartPulse} onClick={() => setExcusing(todayDate)}>
+                Lançar abono
+              </Button>
+            )}
+          </div>
           <Segmented
             value={filter}
             onChange={setFilter}
@@ -290,6 +321,7 @@ export function DaysView({ employeeId, month }: { employeeId: string; month: str
                         canCorrect={canCorrect}
                         onEdit={setEditing}
                         onAdd={() => setAdding(day.date)}
+                        onExcuse={() => setExcusing(day.date)}
                       />
                     ))}
                   </ul>
@@ -311,6 +343,15 @@ export function DaysView({ employeeId, month }: { employeeId: string; month: str
           employeeName={data.employee.name}
           defaultDate={adding}
           timezone={data.timezone}
+        />
+      )}
+      {excusing && (
+        <AbsenceModal
+          key={excusing}
+          employeeId={data.employee.id}
+          employeeName={data.employee.name}
+          defaultDate={excusing}
+          onClose={() => setExcusing(null)}
         />
       )}
       {editing && (

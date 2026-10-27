@@ -288,6 +288,7 @@ describe('buildTimesheet', () => {
       deficitMinutes: 60,
       incompleteDays: 0,
       absentDays: 0,
+      excusedDays: 0,
       alertDays: 2, // os dois dias passam de 6h sem intervalo
     });
   });
@@ -422,5 +423,59 @@ describe('alertas da CLT', () => {
       p('2026-10-19T12:10'),
     ]);
     expect(days[0]).toMatchObject({ status: 'incomplete', alerts: [] });
+  });
+});
+
+describe('abonos', () => {
+  const medical = { type: 'MEDICAL' as const, reason: 'Atestado de 2 dias' };
+
+  it('não conta falta nem horas previstas num dia abonado', () => {
+    const absences = new Map([
+      ['2026-10-19', medical],
+      ['2026-10-20', medical],
+    ]);
+    const { days, totals } = build([], {
+      absences,
+      to: '2026-10-21',
+    });
+    expect(
+      days.map((d) => [d.date, d.status, d.absence?.type ?? null]),
+    ).toEqual([
+      ['2026-10-19', 'complete', 'MEDICAL'],
+      ['2026-10-20', 'complete', 'MEDICAL'],
+      ['2026-10-21', 'absent', null],
+    ]);
+    expect(totals).toMatchObject({
+      absentDays: 1,
+      excusedDays: 2,
+      expectedMinutes: 480,
+    });
+  });
+
+  it('conta como extra o que for trabalhado num dia abonado', () => {
+    const { days } = build([p('2026-10-19T08:00'), p('2026-10-19T10:00')], {
+      absences: new Map([['2026-10-19', medical]]),
+    });
+    expect(days[0]).toMatchObject({
+      scheduled: false,
+      expectedMinutes: 0,
+      overtimeMinutes: 120,
+      lateMinutes: 0,
+    });
+  });
+
+  it('não conta como abonado o fim de semana dentro de férias', () => {
+    const vacation = { type: 'VACATION' as const, reason: 'Férias' };
+    const { days, totals } = build([], {
+      absences: new Map([
+        ['2026-10-17', vacation],
+        ['2026-10-18', vacation],
+        ['2026-10-19', vacation],
+      ]),
+      from: '2026-10-17',
+      to: '2026-10-19',
+    });
+    expect(days.map((d) => d.date)).toEqual(['2026-10-19']);
+    expect(totals.excusedDays).toBe(1);
   });
 });

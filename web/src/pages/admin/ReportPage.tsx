@@ -38,6 +38,7 @@ async function exportCsv(from: string, to: string) {
     'Atrasos',
     'Faltas (dias)',
     'Dias incompletos',
+    'Dias abonados',
     'Dias com alerta (CLT)',
   ];
   const rows = items.map(({ employee, totals: t }) => [
@@ -49,6 +50,7 @@ async function exportCsv(from: string, to: string) {
     formatMinutes(t.lateMinutes),
     t.absentDays,
     t.incompleteDays,
+    t.excusedDays,
     t.alertDays,
   ]);
   const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\r\n');
@@ -172,6 +174,12 @@ export function ReportPage() {
                       <th className={cn(table.th, 'text-right')}>Saldo</th>
                       <th className={cn(table.th, 'text-right')}>Atrasos</th>
                       <th className={cn(table.th, 'text-right')}>Faltas</th>
+                      <th
+                        className={cn(table.th, 'text-right')}
+                        title="Dias de trabalho com atestado, férias, afastamento ou abono"
+                      >
+                        Abonados
+                      </th>
                       <th className={cn(table.th, 'text-right')}>Incompletos</th>
                       <th
                         className={cn(table.th, 'text-right')}
@@ -210,6 +218,13 @@ export function ReportPage() {
                         <td className={cn(table.td, 'text-right tabular-nums')}>
                           {t.absentDays > 0 ? (
                             <span className="font-semibold text-red-300">{t.absentDays}</span>
+                          ) : (
+                            <span className="text-slate-600">0</span>
+                          )}
+                        </td>
+                        <td className={cn(table.td, 'text-right tabular-nums')}>
+                          {t.excusedDays > 0 ? (
+                            <span className="font-semibold text-sky-300">{t.excusedDays}</span>
                           ) : (
                             <span className="text-slate-600">0</span>
                           )}

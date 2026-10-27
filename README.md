@@ -1,5 +1,7 @@
 # Sistema de Ponto · TAI Project
 
+[![CI](https://github.com/leozinr01/bater-ponto/actions/workflows/ci.yml/badge.svg)](https://github.com/leozinr01/bater-ponto/actions/workflows/ci.yml)
+
 Controle de ponto da TAI Project: o funcionário bate o ponto pelo app (PWA instalável no celular), acompanha as horas do dia e do mês, e o administrador gerencia funcionários e jornadas, corrige marcações com justificativa e tira o relatório da equipe.
 
 | Parte | Pasta | Stack |
@@ -27,6 +29,7 @@ Controle de ponto da TAI Project: o funcionário bate o ponto pelo app (PWA inst
 - **Funcionários:** cadastro, perfil, jornada, redefinição de senha e desativação (ninguém é excluído).
 - **Jornadas:** entrada prevista, carga diária, dias de trabalho e tolerâncias.
 - **Correções** direto nos Registros de outro funcionário: incluir marcação faltante, trocar horário ou desconsiderar, sempre com justificativa.
+- **Abonos:** atestado, férias, afastamento ou abono de dias inteiros, lançados nos Registros (inclusive direto de um dia marcado como falta). Os dias de trabalho cobertos não geram falta nem horas previstas. Cancelar não apaga: o lançamento fica no histórico.
 
 **App instalável (PWA):** abre em tela cheia com barra de abas no celular, convite de instalação (inclusive passo a passo no iPhone), QR code para instalar a partir do computador e aviso de nova versão. Sem internet o app abre, mas o ponto fica bloqueado: o horário é sempre o do servidor. Detalhes em [web/README.md](web/README.md).
 
@@ -109,7 +112,9 @@ npm run typecheck --prefix web   # tipos do app
 
 Os testes e2e usam o PostgreSQL de `DATABASE_URL`, mas cada arquivo cria um **schema próprio e temporário** (`test_<uuid>`), aplica as migrations reais e o remove no final. Os dados existentes não são tocados. O usuário do banco precisa de permissão para criar schemas. Prefira rodá-los contra um Postgres local.
 
-Cobertura: login, refresh, troca de senha e invalidação de tokens, limite de tentativas, permissões de todas as rotas administrativas, cadastro e paginação de funcionários, registro de ponto (inclusive cliques simultâneos), filtros por funcionário/período no fuso local, espelho com múltiplas marcações, intervalos, atraso, hora extra, jornada noturna, falta e dia incompleto, correções preservando o original e efeito da jornada nos cálculos.
+Cobertura: login, refresh, troca de senha e invalidação de tokens, limite de tentativas, permissões de todas as rotas administrativas, cadastro e paginação de funcionários, registro de ponto (inclusive cliques simultâneos), filtros por funcionário/período no fuso local, espelho com múltiplas marcações, intervalos, atraso, hora extra, jornada noturna, falta e dia incompleto, correções preservando o original e efeito da jornada nos cálculos, feriados (importação e efeito nas faltas), abonos (sobreposição, cancelamento e permissões), painel do dia e alertas da CLT.
+
+O **CI** ([.github/workflows/ci.yml](.github/workflows/ci.yml)) roda a cada push na `main` e em pull requests: tipos, unitários e e2e da API contra um PostgreSQL descartável, e build do app.
 
 ---
 
