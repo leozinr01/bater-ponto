@@ -70,7 +70,7 @@ Para apresentar o sistema com dados (opcional, **só em banco de desenvolvimento
 Depois, em dois terminais:
 
 ```bash
-npm run start:dev          # API em http://localhost:3333/api (Swagger em /swagger)
+npm run start:dev          # API em http://localhost:3333/api (Swagger em /swagger, só fora de produção)
 npm run dev --prefix web   # App em http://localhost:5173
 ```
 
@@ -186,7 +186,7 @@ Instantes são gravados como `timestamptz` (UTC) e devolvidos em UTC (`timestamp
 
 ## Endpoints
 
-Prefixo `/api`. Detalhes de payloads e respostas no Swagger (`/swagger`).
+Prefixo `/api`. Detalhes de payloads e respostas no Swagger (`/swagger`), disponível só com `NODE_ENV` diferente de `production`.
 
 | Método | Rota | Quem | Descrição |
 | --- | --- | --- | --- |
@@ -244,7 +244,7 @@ docs/                conformidade legal
 - Senha do banco forte e guardada só nas variáveis de ambiente da hospedagem; usuário de banco com privilégios mínimos para a aplicação (separado do que roda migrations).
 - O limite de tentativas de login é em memória por instância; com várias instâncias, use um storage compartilhado.
 - Logs de acesso e monitoramento; política de privacidade/LGPD para os dados dos funcionários.
-- Desabilitar ou proteger o Swagger se a API for pública.
+- O Swagger já fica desligado com `NODE_ENV=production`, e a API responde com os cabeçalhos de segurança do `helmet`.
 - Itens legais em [docs/CONFORMIDADE.md](docs/CONFORMIDADE.md).
 
 ### Dados legados

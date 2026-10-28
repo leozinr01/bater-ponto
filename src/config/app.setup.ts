@@ -1,6 +1,7 @@
 import { EnvService } from '@/infra/env/env.service';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import helmet from 'helmet';
 
 export const swaggerSetup = (app: INestApplication) => {
   const config = new DocumentBuilder()
@@ -27,10 +28,16 @@ export const appSetup = (app: INestApplication, env: EnvService) => {
     }),
   );
 
+  // Cabeçalhos de segurança HTTP; a API só devolve JSON, então a CSP padrão não atrapalha
+  app.use(helmet());
+
   const corsOrigin = env.get('CORS_ORIGIN');
   if (corsOrigin) {
     app.enableCors({ origin: corsOrigin.split(',').map((o) => o.trim()) });
   }
 
-  swaggerSetup(app);
+  // Documentação interativa só fora de produção: não expõe o mapa da API publicamente
+  if (env.get('NODE_ENV') !== 'production') {
+    swaggerSetup(app);
+  }
 };
