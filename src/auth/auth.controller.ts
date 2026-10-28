@@ -16,7 +16,7 @@ import {
   ApiTooManyRequestsResponse,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { ThrottlerGuard } from '@nestjs/throttler';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import {
   ChangePasswordDto,
   LoginDto,
@@ -53,6 +53,9 @@ export class AuthController {
   @Post('refresh')
   @Public()
   @UseGuards(ThrottlerGuard)
+  // A equipe inteira sai pelo mesmo IP da empresa e renova a sessão ao abrir o app no início
+  // do expediente. O token assinado já protege a rota; o limite só barra abuso.
+  @Throttle({ default: { limit: 300, ttl: 60_000 } })
   @HttpCode(200)
   @ApiOperation({
     summary: 'Troca um refresh token válido por um novo par de tokens',

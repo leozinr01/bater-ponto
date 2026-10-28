@@ -4,7 +4,7 @@ import { InstallApp } from '../components/PwaPrompts';
 import { DayStatusBadge } from '../components/timesheet';
 import { useToast } from '../components/toast';
 import { Card, cn, Skeleton, Spinner } from '../components/ui';
-import { ApiError, errorMessage } from '../lib/api';
+import { ApiError, errorMessage, serverNow } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { addDays, formatDuration, formatMinutes, timeOf, today } from '../lib/format';
 import { useOnline } from '../lib/pwa';
@@ -12,9 +12,9 @@ import { useRegisterPunch, useTimesheet } from '../lib/queries';
 import type { RegisteredPunch } from '../lib/types';
 
 function useNow(intervalMs = 1000) {
-  const [now, setNow] = useState(() => new Date());
+  const [now, setNow] = useState(() => serverNow());
   useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), intervalMs);
+    const id = setInterval(() => setNow(serverNow()), intervalMs);
     return () => clearInterval(id);
   }, [intervalMs]);
   return now;

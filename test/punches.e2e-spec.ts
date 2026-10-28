@@ -94,6 +94,46 @@ describe('Ponto (e2e)', () => {
         .send();
       expect(res.body.interpretedAs).toBe('saída');
     });
+
+    it('o banco recusa alterar ou apagar marcações; só aceita desconsiderar', async () => {
+      const employee = await createUser(ctx);
+      const punch = await ctx.prisma.punchClock.create({
+        data: { userId: employee.id, timestamp: br('2026-09-01T08:00') },
+      });
+      const where = { id: punch.id };
+
+      await expect(
+        ctx.prisma.punchClock.update({
+          where,
+          data: { timestamp: br('2026-09-01T07:00') },
+        }),
+      ).rejects.toThrow(/não podem ser alteradas/);
+      await expect(ctx.prisma.punchClock.delete({ where })).rejects.toThrow(
+        /não podem ser apagadas/,
+      );
+      // SQL cru não usa o schema do teste sozinho: sem o nome, iria para o public
+      const schema = new URL(process.env.DATABASE_URL!).searchParams.get(
+        'schema',
+      );
+      await expect(
+        ctx.prisma.$executeRawUnsafe(`TRUNCATE "${schema}"."punch_clocks"`),
+      ).rejects.toThrow(/não podem ser apagadas/);
+
+      const voided = await ctx.prisma.punchClock.update({
+        where,
+        data: {
+          voidedAt: new Date(),
+          voidedById: admin.id,
+          voidReason: 'teste',
+        },
+      });
+      expect(voided.timestamp).toEqual(punch.timestamp);
+
+      // Desconsiderada não volta a valer
+      await expect(
+        ctx.prisma.punchClock.update({ where, data: { voidedAt: null } }),
+      ).rejects.toThrow(/não podem ser alteradas/);
+    });
   });
 
   describe('consulta e permissões', () => {

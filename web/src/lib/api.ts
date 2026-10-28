@@ -32,6 +32,26 @@ export function setTokens(tokens: Tokens | null) {
   }
 }
 
+/** Diferença (ms) entre o relógio do servidor e o do aparelho. */
+let serverClockOffset = 0;
+
+/**
+ * Acerta a diferença de relógio pelo cabeçalho Date das respostas da API. O cabeçalho
+ * tem precisão de segundo, então diferenças menores que 2s são ignoradas.
+ */
+function trackServerClock(res: Response) {
+  const header = res.headers.get('date');
+  const server = header ? Date.parse(header) : NaN;
+  if (isNaN(server)) return;
+  const offset = server + 500 - Date.now();
+  serverClockOffset = Math.abs(offset) >= 2000 ? offset : 0;
+}
+
+/** Agora pelo relógio do servidor: o mesmo horário que vai para as marcações. */
+export function serverNow(): Date {
+  return new Date(Date.now() + serverClockOffset);
+}
+
 /** Disparado quando a sessão não pode mais ser renovada. */
 export const SESSION_EXPIRED_EVENT = 'ponto:session-expired';
 
@@ -71,13 +91,20 @@ async function parseError(res: Response): Promise<ApiError> {
   return new ApiError(res.status, message);
 }
 
-// Uma única renovação em andamento, compartilhada por requisições simultâneas
-let refreshing: Promise<boolean> | null = null;
+/**
+ * ok = sessão renovada; denied = a API recusou o refresh token (sessão encerrada);
+ * unavailable = não deu para renovar agora (sem rede, demora, limite de tentativas,
+ * erro no servidor): a sessão continua e a próxima requisição tenta de novo.
+ */
+type RefreshResult = 'ok' | 'denied' | 'unavailable';
 
-function refreshTokens(): Promise<boolean> {
-  refreshing ??= (async () => {
+// Uma única renovação em andamento, compartilhada por requisições simultâneas
+let refreshing: Promise<RefreshResult> | null = null;
+
+function refreshTokens(): Promise<RefreshResult> {
+  refreshing ??= (async (): Promise<RefreshResult> => {
     const refreshToken = getTokens()?.refreshToken;
-    if (!refreshToken) return false;
+    if (!refreshToken) return 'denied';
     try {
       const res = await fetch(buildUrl('/auth/refresh'), {
         method: 'POST',
@@ -85,11 +112,13 @@ function refreshTokens(): Promise<boolean> {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),
       });
-      if (!res.ok) return false;
+      trackServerClock(res);
+      if (res.status === 400 || res.status === 401) return 'denied';
+      if (!res.ok) return 'unavailable';
       setTokens((await res.json()) as Tokens);
-      return true;
+      return 'ok';
     } catch {
-      return false;
+      return 'unavailable';
     }
   })().finally(() => {
     refreshing = null;
@@ -117,15 +146,21 @@ export async function api<T>(
   let res: Response;
   try {
     res = await send();
+    trackServerClock(res);
     if (res.status === 401 && auth && getTokens()) {
-      if (await refreshTokens()) {
+      const refreshed = await refreshTokens();
+      if (refreshed === 'ok') {
         res = await send();
-      } else {
+        trackServerClock(res);
+      } else if (refreshed === 'denied') {
         setTokens(null);
         window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+      } else {
+        throw new ApiError(0, 'Não foi possível renovar a sessão agora. Verifique a conexão e tente novamente.');
       }
     }
   } catch (error) {
+    if (error instanceof ApiError) throw error;
     if (error instanceof DOMException && error.name === 'TimeoutError') {
       throw new ApiError(0, 'O servidor demorou demais para responder. Tente novamente.');
     }

@@ -196,4 +196,24 @@ describe('Autenticação (e2e)', () => {
     }
     expect(statuses).toContain(429);
   });
+
+  it('a equipe inteira renova a sessão pelo mesmo IP sem ser barrada', async () => {
+    const users = await Promise.all(
+      Array.from({ length: 30 }, () => createUser(ctx)),
+    );
+    const statuses: number[] = [];
+    for (const user of users) {
+      const refreshToken = ctx.jwt.sign({
+        sub: user.id,
+        type: 'refresh',
+        ver: user.tokenVersion,
+      });
+      const res = await ctx
+        .http()
+        .post('/api/auth/refresh')
+        .send({ refreshToken });
+      statuses.push(res.status);
+    }
+    expect(statuses).toEqual(users.map(() => 200));
+  });
 });

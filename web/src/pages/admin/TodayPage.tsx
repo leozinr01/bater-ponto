@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Alert, Avatar, Badge, Button, Card, cn, EmptyState, Loading, PageHeader, type Icon } from '../../components/ui';
 import { absenceLabels } from '../../components/timesheet';
-import { errorMessage } from '../../lib/api';
+import { errorMessage, serverNow } from '../../lib/api';
 import { formatDate, formatMinutes, timeOf, WEEKDAYS } from '../../lib/format';
 import { useToday } from '../../lib/queries';
 import type { PresenceStatus, TodayEmployee } from '../../lib/types';
@@ -23,9 +23,9 @@ const presence: Record<
 
 /** Relógio que avança a cada 30 s, para o tempo trabalhado correr na tela. */
 function useNow() {
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(() => serverNow().getTime());
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 30_000);
+    const id = setInterval(() => setNow(serverNow().getTime()), 30_000);
     return () => clearInterval(id);
   }, []);
   return now;
