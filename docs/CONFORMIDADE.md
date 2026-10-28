@@ -18,7 +18,7 @@
 
 | Princípio | Como o sistema atende |
 | --- | --- |
-| Marcações originais não podem ser alteradas nem apagadas | Correções só desconsideram (`voidedAt`) e incluem marcações. Não há UPDATE de horário nem DELETE, e um trigger no PostgreSQL recusa essas operações mesmo feitas direto no banco (migration `marcacoes_imutaveis`) |
+| Marcações originais não podem ser alteradas nem apagadas | Correções só desconsideram (`voidedAt`) e incluem marcações. Não há UPDATE de horário nem DELETE, e um trigger no PostgreSQL recusa essas operações mesmo feitas direto no banco (migrations `marcacoes_imutaveis` e `marcacoes_imutaveis_reforco`); desconsiderar exige autor e motivo também no banco. Consequência: um usuário que incluiu ou desconsiderou marcações não pode ser excluído direto no banco (o sistema nunca exclui ninguém, só desativa) |
 | Tratamento de marcações com motivo e rastreabilidade | Toda correção exige justificativa e grava autor, data e vínculo com a original |
 | Proibido restringir a marcação | Marcações sempre aceitas, exceto duplicatas em menos de 1 minuto |
 | Proibida marcação automática | Toda marcação nasce de ação do funcionário ou de correção justificada do admin |

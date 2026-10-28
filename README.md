@@ -89,6 +89,7 @@ O app encaminha `/api` para a API, então em desenvolvimento não é preciso con
 | `APP_TIMEZONE` | não | `America/Sao_Paulo` | Fuso que define o "dia" de trabalho e interpreta os horários das jornadas |
 | `CORS_ORIGIN` | não | vazio (desligado) | Origens permitidas, separadas por vírgula. Necessário quando o app fica em outro domínio |
 | `SWAGGER_ENABLED` | não | `false` | `true` liga a documentação interativa em `/swagger`. Deixe desligado em produção |
+| `TRUST_PROXY` | não | vazio (desligado) | Proxies à frente da API: número de saltos (ex.: `1` no Render, Railway ou Fly) ou `true`. Necessário atrás de proxy para o limite de tentativas de login enxergar o IP de cada usuário. Na Vercel já vem configurado |
 
 A API não sobe se alguma variável for inválida. As variáveis do app (`VITE_API_URL`, `VITE_PUBLIC_URL`) estão em [web/.env.example](web/.env.example).
 

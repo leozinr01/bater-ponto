@@ -36,9 +36,18 @@ export const appSetup = (app: INestApplication, env: EnvService) => {
     }),
   );
 
+  const trustProxy = env.get('TRUST_PROXY');
+  if (trustProxy !== undefined) {
+    app.getHttpAdapter().getInstance().set('trust proxy', trustProxy);
+  }
+
   const corsOrigin = env.get('CORS_ORIGIN');
   if (corsOrigin) {
-    app.enableCors({ origin: corsOrigin.split(',').map((o) => o.trim()) });
+    app.enableCors({
+      origin: corsOrigin.split(',').map((o) => o.trim()),
+      // O app acerta o relógio pelo Date das respostas, mesmo em outro domínio
+      exposedHeaders: ['Date'],
+    });
   }
 
   // Documentação interativa só quando ligada de propósito: um deploy que esqueça

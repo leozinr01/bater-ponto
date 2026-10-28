@@ -119,6 +119,14 @@ describe('Ponto (e2e)', () => {
         ctx.prisma.$executeRawUnsafe(`TRUNCATE "${schema}"."punch_clocks"`),
       ).rejects.toThrow(/não podem ser apagadas/);
 
+      // Desconsiderar direto no banco sem autor e motivo também é recusado
+      await expect(
+        ctx.prisma.punchClock.update({
+          where,
+          data: { voidedAt: new Date() },
+        }),
+      ).rejects.toThrow(/informe quem fez e o motivo/);
+
       const voided = await ctx.prisma.punchClock.update({
         where,
         data: {

@@ -4,21 +4,13 @@ import { InstallApp } from '../components/PwaPrompts';
 import { DayStatusBadge } from '../components/timesheet';
 import { useToast } from '../components/toast';
 import { Card, cn, Skeleton, Spinner } from '../components/ui';
-import { ApiError, errorMessage, serverNow } from '../lib/api';
+import { ApiError, errorMessage } from '../lib/api';
+import { useServerNow } from '../lib/clock';
 import { useAuth } from '../lib/auth';
 import { addDays, formatDuration, formatMinutes, timeOf, today } from '../lib/format';
 import { useOnline } from '../lib/pwa';
 import { useRegisterPunch, useTimesheet } from '../lib/queries';
 import type { RegisteredPunch } from '../lib/types';
-
-function useNow(intervalMs = 1000) {
-  const [now, setNow] = useState(() => serverNow());
-  useEffect(() => {
-    const id = setInterval(() => setNow(serverNow()), intervalMs);
-    return () => clearInterval(id);
-  }, [intervalMs]);
-  return now;
-}
 
 function greeting(hour: number) {
   if (hour < 12) return 'Bom dia';
@@ -183,7 +175,7 @@ function FooterStat({ icon: IconCmp, label, value }: { icon: typeof Timer; label
 
 export function ClockPage() {
   const { user } = useAuth();
-  const now = useNow();
+  const now = useServerNow();
   const toast = useToast();
   // Ontem e hoje: um turno noturno aberto no último dia do mês ainda define a próxima marcação
   const localToday = today();
@@ -287,7 +279,7 @@ export function ClockPage() {
                 {register.isError ? (
                   <p className="text-red-300">
                     {errorMessage(register.error)}
-                    {register.error instanceof ApiError && register.error.status === 0 &&
+                    {register.error instanceof ApiError && register.error.kind === 'network' &&
                       ' Confira o resumo de hoje antes de tentar de novo: a marcação pode ter sido registrada.'}
                   </p>
                 ) : last ? (

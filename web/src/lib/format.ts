@@ -1,3 +1,5 @@
+import { serverNow } from './api';
+
 export const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -40,14 +42,14 @@ export function formatDateTime(iso: string): string {
   });
 }
 
-/** Data de hoje (YYYY-MM-DD) no fuso informado, ou no do navegador. */
+/** Data de hoje (YYYY-MM-DD) pelo relógio do servidor, no fuso informado ou no do navegador. */
 export function today(timeZone?: string): string {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).format(new Date());
+  }).format(serverNow());
 }
 
 /** "2026-11-01", -1 -> "2026-10-31" */

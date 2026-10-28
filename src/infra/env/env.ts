@@ -24,6 +24,26 @@ export const envSchema = z.object({
       }
     }, 'APP_TIMEZONE inválido (use um nome IANA, ex: America/Sao_Paulo)'),
   CORS_ORIGIN: z.string().optional(),
+  /**
+   * Proxies confiáveis à frente da API (Express "trust proxy"): número de saltos
+   * (ex.: 1 no Render/Railway/Fly) ou true. Sem isso, atrás de proxy todos os usuários
+   * parecem ter o mesmo IP e dividem o limite de tentativas de login.
+   */
+  TRUST_PROXY: z
+    .string()
+    .regex(
+      /^(\d+|true|false)$/,
+      'TRUST_PROXY deve ser um número de saltos, true ou false',
+    )
+    .optional()
+    .or(z.literal(''))
+    .transform((value) =>
+      !value
+        ? undefined
+        : /^\d+$/.test(value)
+          ? Number(value)
+          : value === 'true',
+    ),
   /** Liga o Swagger em /swagger. Desligado por padrão para não ir ao ar por esquecimento. */
   SWAGGER_ENABLED: z
     .enum(['true', 'false'])

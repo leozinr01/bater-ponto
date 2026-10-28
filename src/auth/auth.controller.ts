@@ -16,7 +16,7 @@ import {
   ApiTooManyRequestsResponse,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { SkipThrottle, Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import {
   ChangePasswordDto,
   LoginDto,
@@ -37,6 +37,8 @@ export class AuthController {
   @Post('login')
   @Public()
   @UseGuards(ThrottlerGuard)
+  // 10 tentativas por minuto por conta (IP + e-mail); o teto por IP só barra varredura
+  @Throttle({ default: { limit: 100, ttl: 60_000 } })
   @HttpCode(200)
   @ApiOperation({ summary: 'Autentica com e-mail e senha' })
   @ApiOkResponse({ type: TokensResponseDto })
@@ -56,6 +58,7 @@ export class AuthController {
   // A equipe inteira sai pelo mesmo IP da empresa e renova a sessão ao abrir o app no início
   // do expediente. O token assinado já protege a rota; o limite só barra abuso.
   @Throttle({ default: { limit: 300, ttl: 60_000 } })
+  @SkipThrottle({ account: true })
   @HttpCode(200)
   @ApiOperation({
     summary: 'Troca um refresh token válido por um novo par de tokens',
@@ -81,6 +84,7 @@ export class AuthController {
 
   @Post('password')
   @UseGuards(ThrottlerGuard)
+  @SkipThrottle({ account: true })
   @HttpCode(200)
   @ApiBearerAuth()
   @ApiOperation({

@@ -197,6 +197,17 @@ describe('Autenticação (e2e)', () => {
     expect(statuses).toContain(429);
   });
 
+  it('a equipe inteira faz login pelo mesmo IP sem ser barrada', async () => {
+    const statuses: number[] = [];
+    for (let i = 0; i < 15; i++) {
+      statuses.push(
+        (await login(`equipe${i}@teste.com`, 'senha-qualquer-1')).status,
+      );
+    }
+    // 401 = e-mail inexistente; o que importa é nenhum 429
+    expect(statuses).toEqual(statuses.map(() => 401));
+  });
+
   it('a equipe inteira renova a sessão pelo mesmo IP sem ser barrada', async () => {
     const users = await Promise.all(
       Array.from({ length: 30 }, () => createUser(ctx)),

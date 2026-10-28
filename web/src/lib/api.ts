@@ -5,12 +5,21 @@ const STORAGE_KEY = 'ponto.tokens';
 /** Uma requisição pendurada vira erro em vez de deixar a tela carregando para sempre. */
 const TIMEOUT_MS = 20_000;
 
+/**
+ * http = a API respondeu com erro; network = sem resposta (sem rede ou demora): o pedido
+ * pode ter chegado ao servidor; session = a sessão expirou e não deu para renovar agora,
+ * então o pedido não foi processado.
+ */
+export type ApiErrorKind = 'http' | 'network' | 'session';
+
 export class ApiError extends Error {
   status: number;
+  kind: ApiErrorKind;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, kind: ApiErrorKind = 'http') {
     super(message);
     this.status = status;
+    this.kind = kind;
   }
 }
 
@@ -35,15 +44,21 @@ export function setTokens(tokens: Tokens | null) {
 /** Diferença (ms) entre o relógio do servidor e o do aparelho. */
 let serverClockOffset = 0;
 
+/** Respostas mais lentas que isso não servem para acertar o relógio. */
+const MAX_CLOCK_SAMPLE_RTT_MS = 1000;
+
 /**
  * Acerta a diferença de relógio pelo cabeçalho Date das respostas da API. O cabeçalho
- * tem precisão de segundo, então diferenças menores que 2s são ignoradas.
+ * tem precisão de segundo, então diferenças menores que 2s são ignoradas; respostas
+ * lentas são descartadas para a demora da rede não parecer diferença de relógio.
  */
-function trackServerClock(res: Response) {
+function trackServerClock(res: Response, sentAt: number) {
+  const receivedAt = Date.now();
+  if (receivedAt - sentAt > MAX_CLOCK_SAMPLE_RTT_MS) return;
   const header = res.headers.get('date');
   const server = header ? Date.parse(header) : NaN;
   if (isNaN(server)) return;
-  const offset = server + 500 - Date.now();
+  const offset = server + 500 - (sentAt + receivedAt) / 2;
   serverClockOffset = Math.abs(offset) >= 2000 ? offset : 0;
 }
 
@@ -106,13 +121,14 @@ function refreshTokens(): Promise<RefreshResult> {
     const refreshToken = getTokens()?.refreshToken;
     if (!refreshToken) return 'denied';
     try {
+      const sentAt = Date.now();
       const res = await fetch(buildUrl('/auth/refresh'), {
         method: 'POST',
         signal: AbortSignal.timeout(TIMEOUT_MS),
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),
       });
-      trackServerClock(res);
+      trackServerClock(res, sentAt);
       if (res.status === 400 || res.status === 401) return 'denied';
       if (!res.ok) return 'unavailable';
       setTokens((await res.json()) as Tokens);
@@ -130,41 +146,46 @@ export async function api<T>(
   path: string,
   { method = 'GET', body, query, auth = true }: RequestOptions = {},
 ): Promise<T> {
-  const send = () => {
+  const send = async () => {
     const headers: Record<string, string> = {};
     if (body !== undefined) headers['Content-Type'] = 'application/json';
     const token = auth ? getTokens()?.accessToken : undefined;
     if (token) headers.Authorization = `Bearer ${token}`;
-    return fetch(buildUrl(path, query), {
+    const sentAt = Date.now();
+    const response = await fetch(buildUrl(path, query), {
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
+    trackServerClock(response, sentAt);
+    return response;
   };
 
   let res: Response;
   try {
     res = await send();
-    trackServerClock(res);
     if (res.status === 401 && auth && getTokens()) {
       const refreshed = await refreshTokens();
       if (refreshed === 'ok') {
         res = await send();
-        trackServerClock(res);
       } else if (refreshed === 'denied') {
         setTokens(null);
         window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
       } else {
-        throw new ApiError(0, 'Não foi possível renovar a sessão agora. Verifique a conexão e tente novamente.');
+        throw new ApiError(
+          0,
+          'Não foi possível renovar a sessão agora. Verifique a conexão e tente novamente.',
+          'session',
+        );
       }
     }
   } catch (error) {
     if (error instanceof ApiError) throw error;
     if (error instanceof DOMException && error.name === 'TimeoutError') {
-      throw new ApiError(0, 'O servidor demorou demais para responder. Tente novamente.');
+      throw new ApiError(0, 'O servidor demorou demais para responder. Tente novamente.', 'network');
     }
-    throw new ApiError(0, 'Não foi possível conectar ao servidor.');
+    throw new ApiError(0, 'Não foi possível conectar ao servidor.', 'network');
   }
 
   if (!res.ok) throw await parseError(res);

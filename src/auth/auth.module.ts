@@ -25,8 +25,21 @@ import { RolesGuard } from './roles.guard';
         verifyOptions: { algorithms: ['HS256'] },
       }),
     }),
-    // Limite de tentativas aplicado nas rotas de autenticação (ver AuthController).
-    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 10 }]),
+    // Limites de tentativas das rotas de autenticação (ver AuthController):
+    // default conta por IP; account conta por IP + e-mail, para barrar quem tenta
+    // adivinhar a senha de uma conta sem travar a equipe que sai pelo mesmo IP.
+    ThrottlerModule.forRoot([
+      { name: 'default', ttl: 60_000, limit: 10 },
+      {
+        name: 'account',
+        ttl: 60_000,
+        limit: 10,
+        getTracker: (req: Record<string, any>) =>
+          `${req.ip}|${String(req.body?.email ?? '')
+            .trim()
+            .toLowerCase()}`,
+      },
+    ]),
   ],
   controllers: [AuthController],
   providers: [

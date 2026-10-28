@@ -1,9 +1,10 @@
 import { AlarmClock, ArrowRight, Coffee, HeartPulse, LayoutDashboard, LogOut, Moon, RefreshCw, Timer, Users } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Alert, Avatar, Badge, Button, Card, cn, EmptyState, Loading, PageHeader, type Icon } from '../../components/ui';
 import { absenceLabels } from '../../components/timesheet';
-import { errorMessage, serverNow } from '../../lib/api';
+import { errorMessage } from '../../lib/api';
+import { useServerNow } from '../../lib/clock';
 import { formatDate, formatMinutes, timeOf, WEEKDAYS } from '../../lib/format';
 import { useToday } from '../../lib/queries';
 import type { PresenceStatus, TodayEmployee } from '../../lib/types';
@@ -20,16 +21,6 @@ const presence: Record<
   day_off: { label: 'Folga', tone: 'gray', icon: Moon, order: 5 },
   away: { label: 'Afastado', tone: 'blue', icon: HeartPulse, order: 6 },
 };
-
-/** Relógio que avança a cada 30 s, para o tempo trabalhado correr na tela. */
-function useNow() {
-  const [now, setNow] = useState(() => serverNow().getTime());
-  useEffect(() => {
-    const id = setInterval(() => setNow(serverNow().getTime()), 30_000);
-    return () => clearInterval(id);
-  }, []);
-  return now;
-}
 
 function liveMinutes(item: TodayEmployee, now: number) {
   if (!item.workingSince) return item.workedMinutes;
@@ -155,7 +146,8 @@ const STAT_ORDER: PresenceStatus[] = ['working', 'on_break', 'late', 'not_starte
 
 export function TodayPage() {
   const today = useToday();
-  const now = useNow();
+  // Avança a cada 30 s, para o tempo trabalhado correr na tela
+  const now = useServerNow(30_000).getTime();
   const [filter, setFilter] = useState<PresenceStatus | null>(null);
   const data = today.data;
 
