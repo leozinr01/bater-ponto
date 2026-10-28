@@ -1,3 +1,4 @@
+import { EmployeesService } from '@/employees/employees.service';
 import { authHeader, createTestApp, createUser, TestContext } from './helpers';
 
 describe('Funcionários e jornadas (e2e)', () => {
@@ -91,6 +92,31 @@ describe('Funcionários e jornadas (e2e)', () => {
         password: 'senha-inicial-1',
       });
     expect(duplicated.status).toBe(409);
+  });
+
+  it('cadastro simultâneo com o mesmo e-mail recebe 409, não erro 500', async () => {
+    await createUser(ctx, { email: 'simultaneo@teste.com' });
+    // Simula a corrida: o outro cadastro passou pela checagem antes deste ser gravado
+    const check = vi
+      .spyOn(
+        EmployeesService.prototype as unknown as {
+          ensureEmailAvailable: () => Promise<void>;
+        },
+        'ensureEmailAvailable',
+      )
+      .mockResolvedValue(undefined);
+
+    try {
+      const res = await ctx.http().post('/api/employees').set(asAdmin).send({
+        name: 'Simultâneo',
+        email: 'simultaneo@teste.com',
+        password: 'senha-inicial-1',
+      });
+      expect(res.status).toBe(409);
+      expect(res.body.message).toBe('Já existe um usuário com este e-mail');
+    } finally {
+      check.mockRestore();
+    }
   });
 
   it('valida dados de cadastro com mensagens claras', async () => {

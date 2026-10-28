@@ -43,7 +43,8 @@ async function exportCsv(from: string, to: string) {
     'Banco de horas (acumulado)',
   ];
   const rows = items.map(({ employee, totals: t, hourBankMinutes }) => [
-    employee.name,
+    // Texto começando com = + - @ viraria fórmula no Excel; o apóstrofo o mantém como texto
+    /^[=+\-@\t\r]/.test(employee.name) ? `'${employee.name}` : employee.name,
     formatMinutes(t.workedMinutes),
     formatMinutes(t.expectedMinutes),
     formatMinutes(t.overtimeMinutes),

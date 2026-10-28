@@ -28,16 +28,22 @@ export const appSetup = (app: INestApplication, env: EnvService) => {
     }),
   );
 
-  // Cabeçalhos de segurança HTTP; a API só devolve JSON, então a CSP padrão não atrapalha
-  app.use(helmet());
+  // Cabeçalhos de segurança HTTP. Sem upgrade-insecure-requests: em HTTP fora do localhost
+  // (celular na rede, container) ele forçaria os arquivos do Swagger para https e a página ficaria em branco
+  app.use(
+    helmet({
+      contentSecurityPolicy: { directives: { upgradeInsecureRequests: null } },
+    }),
+  );
 
   const corsOrigin = env.get('CORS_ORIGIN');
   if (corsOrigin) {
     app.enableCors({ origin: corsOrigin.split(',').map((o) => o.trim()) });
   }
 
-  // Documentação interativa só fora de produção: não expõe o mapa da API publicamente
-  if (env.get('NODE_ENV') !== 'production') {
+  // Documentação interativa só quando ligada de propósito: um deploy que esqueça
+  // alguma variável não expõe o mapa da API
+  if (env.get('SWAGGER_ENABLED')) {
     swaggerSetup(app);
   }
 };

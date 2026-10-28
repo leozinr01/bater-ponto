@@ -18,6 +18,19 @@ import {
   UpdateEmployeeDto,
 } from './employees.dto';
 
+const EMAIL_TAKEN = 'Já existe um usuário com este e-mail';
+
+/** Dois cadastros simultâneos passam pela checagem prévia; o índice único do banco decide. */
+function rethrowEmailConflict(error: unknown): never {
+  if (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === 'P2002'
+  ) {
+    throw new ConflictException(EMAIL_TAKEN);
+  }
+  throw error;
+}
+
 @Injectable()
 export class EmployeesService {
   constructor(
@@ -32,20 +45,24 @@ export class EmployeesService {
       : null;
     const password = await hashPassword(dto.password);
 
-    return this.prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: {
-          name: dto.name,
-          email: dto.email,
-          role: dto.role ?? 'EMPLOYEE',
-          workScheduleId: dto.workScheduleId,
-          password,
-        },
-        select: employeeSelect,
-      });
-      await tx.scheduleHistory.create({ data: baselineRow(user.id, schedule) });
-      return user;
-    });
+    return this.prisma
+      .$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: {
+            name: dto.name,
+            email: dto.email,
+            role: dto.role ?? 'EMPLOYEE',
+            workScheduleId: dto.workScheduleId,
+            password,
+          },
+          select: employeeSelect,
+        });
+        await tx.scheduleHistory.create({
+          data: baselineRow(user.id, schedule),
+        });
+        return user;
+      })
+      .catch(rethrowEmailConflict);
   }
 
   async list(query: ListEmployeesQueryDto) {
@@ -101,34 +118,36 @@ export class EmployeesService {
       dto.workScheduleId !== undefined &&
       dto.workScheduleId !== current.workScheduleId;
 
-    return this.prisma.$transaction(async (tx) => {
-      if (scheduleChanged) {
-        // A troca vale a partir de hoje: os dias anteriores mantêm a jornada da época
-        const previous = current.workScheduleId
-          ? await tx.workSchedule.findUnique({
-              where: { id: current.workScheduleId },
-            })
-          : null;
-        await recordSchedule(
-          tx,
-          id,
-          previous,
-          next,
-          localDate(new Date(), this.env.get('APP_TIMEZONE')),
-        );
-      }
-      return tx.user.update({
-        where: { id },
-        data: {
-          name: dto.name,
-          email: dto.email,
-          role: dto.role,
-          active: dto.active,
-          workScheduleId: dto.workScheduleId,
-        },
-        select: employeeSelect,
-      });
-    });
+    return this.prisma
+      .$transaction(async (tx) => {
+        if (scheduleChanged) {
+          // A troca vale a partir de hoje: os dias anteriores mantêm a jornada da época
+          const previous = current.workScheduleId
+            ? await tx.workSchedule.findUnique({
+                where: { id: current.workScheduleId },
+              })
+            : null;
+          await recordSchedule(
+            tx,
+            id,
+            previous,
+            next,
+            localDate(new Date(), this.env.get('APP_TIMEZONE')),
+          );
+        }
+        return tx.user.update({
+          where: { id },
+          data: {
+            name: dto.name,
+            email: dto.email,
+            role: dto.role,
+            active: dto.active,
+            workScheduleId: dto.workScheduleId,
+          },
+          select: employeeSelect,
+        });
+      })
+      .catch(rethrowEmailConflict);
   }
 
   async resetPassword(id: string, password: string) {
@@ -144,8 +163,7 @@ export class EmployeesService {
 
   private async ensureEmailAvailable(email: string) {
     const existing = await this.prisma.user.findUnique({ where: { email } });
-    if (existing)
-      throw new ConflictException('Já existe um usuário com este e-mail');
+    if (existing) throw new ConflictException(EMAIL_TAKEN);
   }
 
   private async ensureScheduleExists(id: string) {

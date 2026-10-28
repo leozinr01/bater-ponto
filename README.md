@@ -70,7 +70,7 @@ Para apresentar o sistema com dados (opcional, **só em banco de desenvolvimento
 Depois, em dois terminais:
 
 ```bash
-npm run start:dev          # API em http://localhost:3333/api (Swagger em /swagger, só fora de produção)
+npm run start:dev          # API em http://localhost:3333/api (Swagger em /swagger com SWAGGER_ENABLED=true)
 npm run dev --prefix web   # App em http://localhost:5173
 ```
 
@@ -88,6 +88,7 @@ O app encaminha `/api` para a API, então em desenvolvimento não é preciso con
 | `JWT_REFRESH_EXPIRES_IN` | não | `7d` | Validade do refresh token |
 | `APP_TIMEZONE` | não | `America/Sao_Paulo` | Fuso que define o "dia" de trabalho e interpreta os horários das jornadas |
 | `CORS_ORIGIN` | não | vazio (desligado) | Origens permitidas, separadas por vírgula. Necessário quando o app fica em outro domínio |
+| `SWAGGER_ENABLED` | não | `false` | `true` liga a documentação interativa em `/swagger`. Deixe desligado em produção |
 
 A API não sobe se alguma variável for inválida. As variáveis do app (`VITE_API_URL`, `VITE_PUBLIC_URL`) estão em [web/.env.example](web/.env.example).
 
@@ -186,7 +187,7 @@ Instantes são gravados como `timestamptz` (UTC) e devolvidos em UTC (`timestamp
 
 ## Endpoints
 
-Prefixo `/api`. Detalhes de payloads e respostas no Swagger (`/swagger`), disponível só com `NODE_ENV` diferente de `production`.
+Prefixo `/api`. Detalhes de payloads e respostas no Swagger (`/swagger`), disponível com `SWAGGER_ENABLED=true`.
 
 | Método | Rota | Quem | Descrição |
 | --- | --- | --- | --- |
@@ -244,7 +245,7 @@ docs/                conformidade legal
 - Senha do banco forte e guardada só nas variáveis de ambiente da hospedagem; usuário de banco com privilégios mínimos para a aplicação (separado do que roda migrations).
 - O limite de tentativas de login é em memória por instância; com várias instâncias, use um storage compartilhado.
 - Logs de acesso e monitoramento; política de privacidade/LGPD para os dados dos funcionários.
-- O Swagger já fica desligado com `NODE_ENV=production`, e a API responde com os cabeçalhos de segurança do `helmet`.
+- O Swagger só sobe com `SWAGGER_ENABLED=true` (deixe sem a variável em produção), e a API responde com os cabeçalhos de segurança do `helmet`.
 - Itens legais em [docs/CONFORMIDADE.md](docs/CONFORMIDADE.md).
 
 ### Dados legados

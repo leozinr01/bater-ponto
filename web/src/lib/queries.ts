@@ -87,7 +87,8 @@ export function useRegisterPunch() {
   const invalidate = useInvalidatePunches();
   return useMutation({
     mutationFn: () => api<RegisteredPunch>('/punches', { method: 'POST' }),
-    onSuccess: invalidate,
+    // Também no erro: se a resposta se perdeu mas o ponto entrou, a tela mostra a marcação
+    onSettled: invalidate,
   });
 }
 

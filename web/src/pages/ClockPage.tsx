@@ -4,9 +4,9 @@ import { InstallApp } from '../components/PwaPrompts';
 import { DayStatusBadge } from '../components/timesheet';
 import { useToast } from '../components/toast';
 import { Card, cn, Skeleton, Spinner } from '../components/ui';
-import { errorMessage } from '../lib/api';
+import { ApiError, errorMessage } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { currentMonth, formatDuration, formatMinutes, monthRange, timeOf, today } from '../lib/format';
+import { addDays, formatDuration, formatMinutes, timeOf, today } from '../lib/format';
 import { useOnline } from '../lib/pwa';
 import { useRegisterPunch, useTimesheet } from '../lib/queries';
 import type { RegisteredPunch } from '../lib/types';
@@ -185,8 +185,9 @@ export function ClockPage() {
   const { user } = useAuth();
   const now = useNow();
   const toast = useToast();
-  const { from, to } = monthRange(currentMonth());
-  const sheet = useTimesheet({ from, to });
+  // Ontem e hoje: um turno noturno aberto no último dia do mês ainda define a próxima marcação
+  const localToday = today();
+  const sheet = useTimesheet({ from: addDays(localToday, -1), to: localToday });
   const register = useRegisterPunch();
   const [last, setLast] = useState<RegisteredPunch | null>(null);
   const online = useOnline();
@@ -284,7 +285,11 @@ export function ClockPage() {
 
               <div className="mt-5 min-h-6 text-sm">
                 {register.isError ? (
-                  <p className="text-red-300">{errorMessage(register.error)}</p>
+                  <p className="text-red-300">
+                    {errorMessage(register.error)}
+                    {register.error instanceof ApiError && register.error.status === 0 &&
+                      ' Confira o resumo de hoje antes de tentar de novo: a marcação pode ter sido registrada.'}
+                  </p>
                 ) : last ? (
                   <p className="text-emerald-300">
                     ✓ {last.interpretedAs === 'entrada' ? 'Entrada' : 'Saída'} registrada às{' '}

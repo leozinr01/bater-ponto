@@ -16,19 +16,49 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export const ME_KEY = ['auth', 'me'];
+const USER_KEY = 'ponto.user';
+
+/** Último usuário carregado: sem internet, o app abre com ele em vez de esperar a rede. */
+function getCachedUser(): Employee | undefined {
+  try {
+    const raw = localStorage.getItem(USER_KEY);
+    return raw ? (JSON.parse(raw) as Employee) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function setCachedUser(user: Employee | null) {
+  try {
+    if (user) localStorage.setItem(USER_KEY, JSON.stringify(user));
+    else localStorage.removeItem(USER_KEY);
+  } catch {
+    // armazenamento indisponível (modo privado restrito)
+  }
+}
+
+async function fetchMe() {
+  const user = await api<Employee>('/auth/me');
+  setCachedUser(user);
+  return user;
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
 
   const me = useQuery({
     queryKey: ME_KEY,
-    queryFn: () => (getTokens() ? api<Employee>('/auth/me') : null),
+    queryFn: () => (getTokens() ? fetchMe() : null),
+    // Mostra o usuário guardado na hora e confirma com a API assim que houver conexão
+    initialData: () => (getTokens() ? getCachedUser() : undefined),
+    initialDataUpdatedAt: 0,
     staleTime: 5 * 60_000,
     retry: false,
   });
 
   const logout = () => {
     setTokens(null);
+    setCachedUser(null);
     queryClient.clear();
     queryClient.setQueryData(ME_KEY, null);
   };
@@ -46,10 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     setTokens(tokens);
     queryClient.clear();
-    await queryClient.fetchQuery({
-      queryKey: ME_KEY,
-      queryFn: () => api<Employee>('/auth/me'),
-    });
+    await queryClient.fetchQuery({ queryKey: ME_KEY, queryFn: fetchMe });
   };
 
   const user = me.data ?? null;

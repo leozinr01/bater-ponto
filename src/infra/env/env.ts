@@ -24,6 +24,11 @@ export const envSchema = z.object({
       }
     }, 'APP_TIMEZONE inválido (use um nome IANA, ex: America/Sao_Paulo)'),
   CORS_ORIGIN: z.string().optional(),
+  /** Liga o Swagger em /swagger. Desligado por padrão para não ir ao ar por esquecimento. */
+  SWAGGER_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
 });
 
 export type Env = z.infer<typeof envSchema>;

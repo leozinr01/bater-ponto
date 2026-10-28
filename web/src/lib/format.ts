@@ -50,6 +50,12 @@ export function today(timeZone?: string): string {
   }).format(new Date());
 }
 
+/** "2026-11-01", -1 -> "2026-10-31" */
+export function addDays(date: string, days: number): string {
+  const [y, m, d] = date.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
 export function currentMonth(): string {
   return today().slice(0, 7);
 }

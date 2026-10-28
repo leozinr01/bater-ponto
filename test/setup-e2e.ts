@@ -19,6 +19,7 @@ url.searchParams.set('schema', schema);
 
 process.env.DATABASE_URL = url.toString();
 process.env.NODE_ENV = 'test';
+process.env.SWAGGER_ENABLED = 'false';
 process.env.APP_TIMEZONE = 'America/Sao_Paulo';
 process.env.JWT_SECRET = randomBytes(48).toString('base64');
 
