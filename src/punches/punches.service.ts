@@ -33,6 +33,7 @@ import {
   MAX_BREAK_MINUTES,
   DayAbsence,
   MAX_WORK_PERIOD_MINUTES,
+  PunchInput,
   ScheduleSegment,
   TimesheetDay,
 } from './timesheet';
@@ -168,14 +169,14 @@ export class PunchesService {
     if (!employee) throw new NotFoundException('Funcionário não encontrado');
 
     const [punches, holidays, absences, history] = await Promise.all([
-      this.validPunchesInWindow([employeeId], query.from, query.to),
+      this.validPunchesByEmployee([employeeId], query.from, query.to),
       this.holidays.byDate(query.from, query.to),
       this.absences.byEmployeeAndDate([employeeId], query.from, query.to),
       loadScheduleHistory(this.prisma, [employeeId]),
     ]);
     return this.buildEmployeeTimesheet(
       employee,
-      punches,
+      punches.get(employeeId) ?? [],
       query.from,
       query.to,
       holidays,
@@ -202,7 +203,7 @@ export class PunchesService {
 
     const ids = employees.map((e) => e.id);
     const [punches, holidays, absences, history] = await Promise.all([
-      this.validPunchesInWindow(ids, query.from, query.to),
+      this.validPunchesByEmployee(ids, query.from, query.to),
       this.holidays.byDate(query.from, query.to),
       this.absences.byEmployeeAndDate(ids, query.from, query.to),
       loadScheduleHistory(this.prisma, ids),
@@ -211,7 +212,7 @@ export class PunchesService {
     const data = employees.map((employee) => {
       const sheet = this.buildEmployeeTimesheet(
         employee,
-        punches.filter((p) => p.userId === employee.id),
+        punches.get(employee.id) ?? [],
         query.from,
         query.to,
         holidays,
@@ -235,7 +236,7 @@ export class PunchesService {
   ): Promise<Map<string, TimesheetDay[]>> {
     const ids = employees.map((e) => e.id);
     const [punches, holidays, absences, history] = await Promise.all([
-      this.validPunchesInWindow(ids, from, to),
+      this.validPunchesByEmployee(ids, from, to),
       this.holidays.byDate(from, to),
       this.absences.byEmployeeAndDate(ids, from, to),
       loadScheduleHistory(this.prisma, ids),
@@ -245,7 +246,7 @@ export class PunchesService {
       employees.map((employee) => [
         employee.id,
         buildTimesheet({
-          punches: punches.filter((p) => p.userId === employee.id),
+          punches: punches.get(employee.id) ?? [],
           schedule: employee.workSchedule,
           scheduleHistory: history.get(employee.id),
           timezone: this.tz,
@@ -273,7 +274,7 @@ export class PunchesService {
     });
     const ids = employees.map((e) => e.id);
     const [punches, holidays, absences] = await Promise.all([
-      this.validPunchesInWindow(ids, yesterday, today),
+      this.validPunchesByEmployee(ids, yesterday, today),
       this.holidays.byDate(yesterday, today),
       this.absences.byEmployeeAndDate(ids, yesterday, today),
     ]);
@@ -281,7 +282,7 @@ export class PunchesService {
 
     const items = employees.map((employee) => {
       const { days } = buildTimesheet({
-        punches: punches.filter((p) => p.userId === employee.id),
+        punches: punches.get(employee.id) ?? [],
         schedule: employee.workSchedule,
         timezone: this.tz,
         from: yesterday,
@@ -454,7 +455,7 @@ export class PunchesService {
 
   private buildEmployeeTimesheet(
     employee: EmployeeWithSchedule,
-    punches: PunchClock[],
+    punches: PunchInput[],
     from: string,
     to: string,
     holidays: Map<string, string>,
@@ -502,12 +503,13 @@ export class PunchesService {
    * Busca uma folga de um dia antes e depois do período: jornadas que começam no
    * último dia e terminam no seguinte precisam de todas as marcações.
    */
-  private validPunchesInWindow(
+  private async validPunchesByEmployee(
     employeeIds: string[],
     from: string,
     to: string,
-  ) {
-    return this.prisma.punchClock.findMany({
+  ): Promise<Map<string, PunchInput[]>> {
+    // Só as colunas do cálculo: o banco de horas lê anos de marcações de uma vez
+    const punches = await this.prisma.punchClock.findMany({
       where: {
         userId: { in: employeeIds },
         voidedAt: null,
@@ -516,8 +518,16 @@ export class PunchesService {
           lt: zonedInstant(addDays(to, 2), '00:00', this.tz),
         },
       },
+      select: { id: true, userId: true, timestamp: true },
       orderBy: { timestamp: 'asc' },
     });
+    const byEmployee = new Map<string, PunchInput[]>();
+    for (const { userId, ...punch } of punches) {
+      const list = byEmployee.get(userId);
+      if (list) list.push(punch);
+      else byEmployee.set(userId, [punch]);
+    }
+    return byEmployee;
   }
 
   private resolveEmployeeId(actor: AuthUser, employeeId?: string) {
