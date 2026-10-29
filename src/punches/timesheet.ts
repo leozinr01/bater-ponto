@@ -33,6 +33,8 @@ export const MIN_REST_BETWEEN_SHIFTS_MINUTES = 11 * 60;
 export interface PunchInput {
   id: string;
   timestamp: Date;
+  /** Só repassado para a tela: não entra no cálculo. */
+  locationStatus?: 'INSIDE' | 'OUTSIDE' | 'UNAVAILABLE' | null;
 }
 
 export interface ScheduleInput {

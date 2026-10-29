@@ -8,6 +8,7 @@ import { DatabaseModule } from './infra/database/database.module';
 import { envSchema } from './infra/env/env';
 import { PunchesModule } from './punches/punches.module';
 import { WorkSchedulesModule } from './work-schedules/work-schedules.module';
+import { WorkplacesModule } from './workplaces/workplaces.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { WorkSchedulesModule } from './work-schedules/work-schedules.module';
     WorkSchedulesModule,
     HolidaysModule,
     AbsencesModule,
+    WorkplacesModule,
     PunchesModule,
   ],
 })

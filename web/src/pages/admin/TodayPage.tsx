@@ -1,4 +1,16 @@
-import { AlarmClock, ArrowRight, Coffee, HeartPulse, LayoutDashboard, LogOut, Moon, RefreshCw, Timer, Users } from 'lucide-react';
+import {
+  AlarmClock,
+  ArrowRight,
+  Coffee,
+  HeartPulse,
+  LayoutDashboard,
+  LogOut,
+  MapPinOff,
+  Moon,
+  RefreshCw,
+  Timer,
+  Users,
+} from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Alert, Avatar, Badge, Button, Card, cn, EmptyState, Loading, PageHeader, type Icon } from '../../components/ui';
@@ -94,6 +106,19 @@ function EmployeeRow({ item, now }: { item: TodayEmployee; now: number }) {
           {item.absenceType ? absenceLabels[item.absenceType] : label}
         </Badge>
         {item.lateMinutes ? <span className="text-[11px] text-amber-300">+{formatMinutes(item.lateMinutes)}</span> : null}
+        {item.outsideLocationPunches > 0 && (
+          <span title="Marcações de hoje feitas fora dos locais de trabalho. Veja o mapa nos registros.">
+            <Badge tone="red">
+              <MapPinOff className="size-3" />
+              Fora do local{item.outsideLocationPunches > 1 ? ` (${item.outsideLocationPunches})` : ''}
+            </Badge>
+          </span>
+        )}
+        {item.noLocationPunches > 0 && (
+          <span title="Marcações de hoje sem localização: permissão negada, GPS desligado ou sem sinal">
+            <Badge>Sem localização</Badge>
+          </span>
+        )}
       </div>
 
       <p className="basis-40 text-xs text-slate-400 tabular-nums">
@@ -224,7 +249,8 @@ export function TodayPage() {
           </Card>
           <p className="text-xs text-slate-500">
             Atrasado = dia de trabalho, passou do horário de entrada mais a tolerância e ainda não marcou. Em intervalo =
-            saiu e ainda não cumpriu a carga do dia. Atualiza sozinho a cada minuto.
+            saiu e ainda não cumpriu a carga do dia. Fora do local = marcação longe de todos os locais de trabalho (a
+            marcação vale normalmente). Atualiza sozinho a cada minuto.
           </p>
         </div>
       )}

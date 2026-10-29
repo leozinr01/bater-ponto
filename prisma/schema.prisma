@@ -144,6 +144,28 @@ enum PunchSource {
   ADMIN
 }
 
+/// Local de trabalho: marcações fora do raio de todos os locais recebem alerta (nunca são recusadas).
+model Workplace {
+  id           String @id @default(uuid())
+  name         String
+  latitude     Float
+  longitude    Float
+  radiusMeters Int    @map("radius_meters")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime? @updatedAt @map("updated_at")
+
+  @@map("workplaces")
+}
+
+/// INSIDE = dentro do raio de um local; OUTSIDE = fora de todos;
+/// UNAVAILABLE = o aparelho não enviou a localização (permissão negada, sem GPS).
+enum PunchLocationStatus {
+  INSIDE
+  OUTSIDE
+  UNAVAILABLE
+}
+
 /// Marcação de ponto. Marcações nunca são apagadas nem alteradas:
 /// correções desconsideram a original (voided*) e incluem uma nova (source = ADMIN).
 model PunchClock {
@@ -159,7 +181,18 @@ model PunchClock {
   /// Marcação que esta inclusão substitui.
   replacesId  String?  @map("replaces_id")
 
-  voidedAt   DateTime? @map("voided_at") @db.Timestamptz(3)
+  /// Localização enviada pelo aparelho no momento da marcação (só marcações do funcionário).
+  latitude       Float?
+  longitude      Float?
+  /// Margem de erro informada pelo aparelho, em metros.
+  accuracyMeters Float?               @map("accuracy_meters")
+  /// Avaliação na hora da marcação; null = sem local cadastrado ou inclusão do admin.
+  locationStatus PunchLocationStatus? @map("location_status")
+  /// Local mais próximo e a distância até ele, guardados como eram na hora da marcação.
+  workplaceName  String?              @map("workplace_name")
+  distanceMeters Int?                 @map("distance_meters")
+
+  voidedAt  DateTime? @map("voided_at") @db.Timestamptz(3)
   voidedById String?   @map("voided_by_id")
   voidReason String?   @map("void_reason")
 

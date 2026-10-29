@@ -60,7 +60,8 @@ Itens que, pelo que conhecemos da Portaria 671, são exigidos de um REP-P e prec
 ## LGPD e segurança
 
 - Registros de ponto são dados pessoais de empregados. Definir base legal (cumprimento de obrigação legal), prazo de retenção, controle de acesso e canal para o titular.
-- Não coletamos geolocalização nem biometria. Se forem adicionadas, exigem avaliação específica (dado sensível no caso de biometria).
+- **Geolocalização:** o app pede a localização só no momento da marcação (não há rastreamento durante o dia) e grava latitude, longitude, margem de erro e a avaliação em relação aos locais de trabalho. A marcação nunca é recusada por causa da localização (a Portaria 671 proíbe restringir o registro): fora do raio ou sem localização ela vale normalmente e recebe um alerta. O funcionário é avisado na tela de ponto e vê a própria localização nos registros. Antes do uso oficial: informar a finalidade (comprovar o local da marcação) na política de privacidade ou em comunicado aos empregados, definir o prazo de retenção junto com o dos registros de ponto e avaliar se a convenção coletiva trata do tema. A localização do celular pode ser falsificada com apps de GPS falso: serve como indício, não como prova absoluta.
+- Não coletamos biometria. Se for adicionada, exige avaliação específica (dado sensível).
 - Backups criptografados, testados e com retenção compatível com o prazo legal são pré-requisito para uso real.
 
 ## Próximos passos sugeridos

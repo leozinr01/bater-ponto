@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiBody,
   ApiConflictResponse,
   ApiCreatedResponse,
   ApiForbiddenResponse,
@@ -25,6 +26,7 @@ import {
   ManualPunchDto,
   PeriodQueryDto,
   PunchResponseDto,
+  RegisterPunchDto,
   RegisterPunchResponseDto,
   ReplacePunchDto,
   ReportItemDto,
@@ -49,14 +51,18 @@ export class PunchesController {
   @ApiOperation({
     summary: 'Registra uma marcação do usuário autenticado',
     description:
-      'O horário é sempre o do servidor. Não há tipo: a ordem cronológica define entrada/saída/intervalos.',
+      'O horário é sempre o do servidor. Não há tipo: a ordem cronológica define entrada/saída/intervalos. ' +
+      'A localização é opcional e só gera alerta (fora do local, sem localização): nunca impede a marcação.',
   })
+  @ApiBody({ type: RegisterPunchDto, required: false })
   @ApiCreatedResponse({ type: RegisterPunchResponseDto })
   @ApiConflictResponse({
     description: 'Marcação duplicada em menos de 1 minuto',
   })
-  register(@CurrentUser() user: AuthUser) {
-    return this.punchesService.register(user);
+  // Corpo sem validação de propósito: localização ausente ou inválida vira
+  // "sem localização" em vez de recusar a marcação
+  register(@CurrentUser() user: AuthUser, @Body() body: unknown) {
+    return this.punchesService.register(user, body);
   }
 
   @Get()

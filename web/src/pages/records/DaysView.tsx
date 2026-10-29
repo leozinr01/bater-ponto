@@ -4,6 +4,7 @@ import { useState, type ReactNode } from 'react';
 import { AbsenceModal, AbsencesCard } from '../../components/absences';
 import { AddPunchModal, EditPunchModal } from '../../components/corrections';
 import { PeriodPairs, type PunchRef } from '../../components/DayPeriods';
+import { DayLocationAlert } from '../../components/location';
 import { alertLabels, Balance, DayAlerts, DayStatusBadge } from '../../components/timesheet';
 import { Alert, Badge, Button, Card, cn, EmptyState, Loading, Segmented } from '../../components/ui';
 import { WeekStrip } from '../../components/WeekStrip';
@@ -91,6 +92,7 @@ function DayRow({
           </span>
         )}
         <DayAlerts alerts={day.alerts} />
+        <DayLocationAlert day={day} />
         {showStatus && (
           <span className="flex items-center gap-2">
             <DayStatusBadge day={day} />

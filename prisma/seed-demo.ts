@@ -3,6 +3,8 @@
  * (e-mails @demo.local, senha demo1234) e ~2 meses de marcações com perfis variados:
  * pontual, atrasos, horas extras, marcação esquecida, faltas, intervalo curto,
  * férias e atestado (lançados em nome do primeiro administrador, se houver).
+ * Cria também um local de trabalho de exemplo (edite as coordenadas em Locais) e
+ * marcações com localização: quase todas no local, algumas fora e algumas sem GPS.
  * As marcações de hoje vão só até a hora atual, então o painel "Hoje" fica movimentado.
  *
  * Use num banco de desenvolvimento ou de apresentação, NUNCA no banco de produção:
@@ -15,11 +17,19 @@ import { hash } from 'bcryptjs';
 import 'dotenv/config';
 import { addDays, localDate, weekday, zonedInstant } from '../src/common/time';
 import { nationalHolidays } from '../src/holidays/national-holidays';
+import { DeviceLocation, evaluateLocation } from '../src/workplaces/geo';
 
 const TZ = process.env.APP_TIMEZONE ?? 'America/Sao_Paulo';
 const DAYS_BACK = 60;
 const PASSWORD = 'demo1234';
 const EMAIL_DOMAIN = 'demo.local';
+/** Local de exemplo (Av. Paulista, São Paulo): ajuste na tela Locais. */
+const WORKPLACE = {
+  name: 'Escritório (demo)',
+  latitude: -23.561414,
+  longitude: -46.655881,
+  radiusMeters: 150,
+};
 
 interface Profile {
   name: string;
@@ -30,6 +40,9 @@ interface Profile {
   forget?: number;
   absent?: number;
   shortBreak?: number;
+  /** Chance de cada marcação ser feita longe do escritório ou sem GPS. */
+  outside?: number;
+  noGps?: number;
   /** Afastamento em dias contados a partir de hoje (ex: [-25, -21]). */
   absence?: {
     type: 'MEDICAL' | 'VACATION';
@@ -40,7 +53,7 @@ interface Profile {
 
 const PROFILES: Profile[] = [
   { name: 'Ana Souza', schedule: 'full' },
-  { name: 'Bruno Lima', schedule: 'full', late: 0.35 },
+  { name: 'Bruno Lima', schedule: 'full', late: 0.35, outside: 0.12 },
   { name: 'Carla Mendes', schedule: 'full', overtime: 0.45 },
   {
     name: 'Diego Rocha',
@@ -61,7 +74,13 @@ const PROFILES: Profile[] = [
   },
   { name: 'Felipe Costa', schedule: 'full', shortBreak: 0.3, overtime: 0.15 },
   { name: 'Gabriela Nunes', schedule: 'part', late: 0.1 },
-  { name: 'Henrique Dias', schedule: 'part', absent: 0.04, forget: 0.04 },
+  {
+    name: 'Henrique Dias',
+    schedule: 'part',
+    absent: 0.04,
+    forget: 0.04,
+    noGps: 0.1,
+  },
 ];
 
 /** Gerador pseudoaleatório com semente: os dados saem iguais a cada execução. */
@@ -83,6 +102,25 @@ const slug = (name: string) =>
 
 const at = (date: string, minutesOfDay: number) =>
   new Date(zonedInstant(date, '00:00', TZ).getTime() + minutesOfDay * 60_000);
+
+/** Ponto aleatório a uma distância entre min e max metros do escritório. */
+function near(min: number, max: number): DeviceLocation {
+  const distance = between(min, max);
+  const angle = random() * 2 * Math.PI;
+  return {
+    latitude: WORKPLACE.latitude + (distance * Math.cos(angle)) / 111_195,
+    longitude:
+      WORKPLACE.longitude +
+      (distance * Math.sin(angle)) /
+        (111_195 * Math.cos((WORKPLACE.latitude * Math.PI) / 180)),
+    accuracyMeters: between(6, 35),
+  };
+}
+
+function punchLocation(profile: Profile): DeviceLocation | null {
+  if (chance(profile.noGps)) return null;
+  return chance(profile.outside) ? near(2500, 12_000) : near(0, 70);
+}
 
 /** Marcações de um dia (minutos desde a meia-noite local), conforme o perfil. */
 function dayPunches(profile: Profile): number[] {
@@ -146,6 +184,8 @@ async function main() {
         (h) => h.date,
       ),
     );
+
+    await prisma.workplace.create({ data: WORKPLACE });
 
     // Jornadas
     const full = await prisma.workSchedule.create({
@@ -225,12 +265,22 @@ async function main() {
       }
 
       await prisma.punchClock.createMany({
-        data: punches.map((timestamp) => ({
-          userId: user.id,
-          timestamp,
-          source: 'EMPLOYEE' as const,
-          createdAt: timestamp,
-        })),
+        data: punches.map((timestamp) => {
+          const location = punchLocation(profile);
+          const evaluation = evaluateLocation(location, [WORKPLACE]);
+          return {
+            userId: user.id,
+            timestamp,
+            source: 'EMPLOYEE' as const,
+            createdAt: timestamp,
+            latitude: location?.latitude,
+            longitude: location?.longitude,
+            accuracyMeters: location?.accuracyMeters,
+            locationStatus: evaluation.status,
+            workplaceName: evaluation.workplaceName,
+            distanceMeters: evaluation.distanceMeters,
+          };
+        }),
       });
       totalPunches += punches.length;
       console.log(

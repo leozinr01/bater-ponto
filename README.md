@@ -26,6 +26,7 @@ Controle de ponto da TAI Project: o funcionário bate o ponto pelo app (PWA inst
 - **Hoje:** painel ao vivo da equipe: quem está trabalhando, em intervalo, atrasado, ainda não chegou, encerrou ou está de folga, com horas do dia e progresso da jornada. Atualiza a cada minuto.
 - **Relatório** do mês por funcionário, com exportação em CSV.
 - **Feriados:** cadastro por ano e importação dos feriados nacionais (incluindo a Paixão de Cristo, que muda todo ano). Em dia de trabalho, feriado não gera falta e o tempo trabalhado conta como extra.
+- **Locais de trabalho e geolocalização:** cada marcação registra a localização do celular no momento do ponto. O administrador cadastra os locais (coordenadas e raio) e vê o alerta **fora do local** no painel Hoje, nos Registros (com link para o mapa) e no Relatório. A marcação **nunca é recusada** pela localização: fora do raio ou sem GPS ela vale normalmente e só recebe o alerta (a Portaria 671 proíbe restringir o registro).
 - **Alertas da CLT** nos registros e no relatório: intervalo abaixo do mínimo (art. 71), mais de 2h extras no dia (art. 59) e menos de 11h de descanso entre jornadas (art. 66).
 - **Funcionários:** cadastro, perfil, jornada, redefinição de senha e desativação (ninguém é excluído).
 - **Jornadas:** entrada prevista, carga diária, dias de trabalho e tolerâncias. Mudanças (na jornada ou na de um funcionário) valem a partir do dia em que são feitas: os meses anteriores não são recalculados.
@@ -65,7 +66,7 @@ No **PowerShell**, o passo 5 fica assim:
 $env:ADMIN_NAME="Administrador"; $env:ADMIN_EMAIL="admin@empresa.com"; $env:ADMIN_PASSWORD="troque-esta-senha"; npm run admin:create
 ```
 
-Para apresentar o sistema com dados (opcional, **só em banco de desenvolvimento ou de demonstração**, nunca no de produção): `CONFIRM_DEMO_SEED=sim npm run seed:demo` cria 2 jornadas, os feriados nacionais e 8 funcionários fictícios (`@demo.local`, senha `demo1234`) com cerca de 2 meses de marcações variadas. No PowerShell: `$env:CONFIRM_DEMO_SEED="sim"; npm run seed:demo`.
+Para apresentar o sistema com dados (opcional, **só em banco de desenvolvimento ou de demonstração**, nunca no de produção): `CONFIRM_DEMO_SEED=sim npm run seed:demo` cria 2 jornadas, os feriados nacionais e 8 funcionários fictícios (`@demo.local`, senha `demo1234`) com cerca de 2 meses de marcações variadas, um local de trabalho de exemplo (edite as coordenadas em **Locais**) e marcações com localização, algumas fora do local e outras sem GPS. No PowerShell: `$env:CONFIRM_DEMO_SEED="sim"; npm run seed:demo`.
 
 Depois, em dois terminais:
 

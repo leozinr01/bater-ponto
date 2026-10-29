@@ -40,6 +40,7 @@ async function exportCsv(from: string, to: string) {
     'Dias incompletos',
     'Dias abonados',
     'Dias com alerta (CLT)',
+    'Marcações fora do local',
     'Banco de horas (acumulado)',
   ];
   const rows = items.map(({ employee, totals: t, hourBankMinutes }) => [
@@ -54,6 +55,7 @@ async function exportCsv(from: string, to: string) {
     t.incompleteDays,
     t.excusedDays,
     t.alertDays,
+    t.outsideLocationPunches,
     formatMinutes(hourBankMinutes),
   ]);
   const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\r\n');
@@ -193,6 +195,9 @@ export function ReportPage() {
                       >
                         Alertas
                       </th>
+                      <th className={cn(table.th, 'text-right')} title="Marcações feitas fora dos locais de trabalho">
+                        Fora do local
+                      </th>
                       <th className={table.th} />
                     </tr>
                   </thead>
@@ -261,6 +266,13 @@ export function ReportPage() {
                             <span className="text-slate-600">0</span>
                           )}
                         </td>
+                        <td className={cn(table.td, 'text-right tabular-nums')}>
+                          {t.outsideLocationPunches > 0 ? (
+                            <span className="font-semibold text-red-300">{t.outsideLocationPunches}</span>
+                          ) : (
+                            <span className="text-slate-600">0</span>
+                          )}
+                        </td>
                         <td className={cn(table.td, 'text-right')}>
                           <Link
                             to={`/registros?funcionario=${employee.id}${month === currentMonth() ? '' : `&mes=${month}`}`}
@@ -284,7 +296,8 @@ export function ReportPage() {
           </Card>
           <p className="text-xs text-slate-500">
             Saldo = horas extras − falta de horas. Dias incompletos só entram no saldo depois de corrigidos. Alertas = dias
-            com intervalo abaixo do mínimo, mais de 2h extras ou menos de 11h de descanso entre jornadas (CLT).
+            com intervalo abaixo do mínimo, mais de 2h extras ou menos de 11h de descanso entre jornadas (CLT). Fora do
+            local = marcações longe de todos os locais de trabalho.
           </p>
         </div>
       )}

@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   LayoutGrid,
   LogOut,
+  MapPin,
   PiggyBank,
   UserRound,
   Users,
@@ -41,6 +42,7 @@ const adminLinks: NavEntry[] = [
   { to: '/admin/funcionarios', label: 'Funcionários', icon: Users },
   { to: '/admin/jornadas', label: 'Jornadas', icon: CalendarClock },
   { to: '/admin/feriados', label: 'Feriados', icon: CalendarHeart },
+  { to: '/admin/locais', label: 'Locais', icon: MapPin },
 ];
 
 /** Marca: monograma TAI + nome do sistema. */

@@ -5,6 +5,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { api } from './api';
+import type { DeviceLocation } from './geo';
 import type {
   Absence,
   AbsenceType,
@@ -21,6 +22,8 @@ import type {
   TodayOverview,
   WorkSchedule,
   WorkScheduleInput,
+  Workplace,
+  WorkplaceInput,
 } from './types';
 
 // ---- Ponto ----
@@ -86,7 +89,9 @@ function useInvalidatePunches() {
 export function useRegisterPunch() {
   const invalidate = useInvalidatePunches();
   return useMutation({
-    mutationFn: () => api<RegisteredPunch>('/punches', { method: 'POST' }),
+    /** Sem localização, vai sem corpo: o ponto é registrado com o alerta "sem localização". */
+    mutationFn: (location: DeviceLocation | null) =>
+      api<RegisteredPunch>('/punches', { method: 'POST', body: location ?? undefined }),
     // Também no erro: se a resposta se perdeu mas o ponto entrou, a tela mostra a marcação
     onSettled: invalidate,
   });
@@ -266,6 +271,34 @@ export function useImportNationalHolidays() {
     mutationFn: (year: number) =>
       api<{ created: number; skipped: number }>('/holidays/national', { method: 'POST', query: { year } }),
     onSuccess: invalidate,
+  });
+}
+
+// ---- Locais de trabalho ----
+
+export function useWorkplaces() {
+  return useQuery({
+    queryKey: ['workplaces'],
+    queryFn: () => api<Workplace[]>('/workplaces'),
+  });
+}
+
+export function useSaveWorkplace() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: WorkplaceInput & { id?: string }) =>
+      id
+        ? api<Workplace>(`/workplaces/${id}`, { method: 'PUT', body })
+        : api<Workplace>('/workplaces', { method: 'POST', body }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['workplaces'] }),
+  });
+}
+
+export function useDeleteWorkplace() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api<void>(`/workplaces/${id}`, { method: 'DELETE' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['workplaces'] }),
   });
 }
 

@@ -13,6 +13,7 @@ import { HolidaysPage } from './pages/admin/HolidaysPage';
 import { ReportPage } from './pages/admin/ReportPage';
 import { SchedulesPage } from './pages/admin/SchedulesPage';
 import { TodayPage } from './pages/admin/TodayPage';
+import { WorkplacesPage } from './pages/admin/WorkplacesPage';
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
@@ -70,6 +71,7 @@ export function App() {
                 <Route path="funcionarios" element={<EmployeesPage />} />
                 <Route path="jornadas" element={<SchedulesPage />} />
                 <Route path="feriados" element={<HolidaysPage />} />
+                <Route path="locais" element={<WorkplacesPage />} />
                 <Route path="*" element={<Navigate to="hoje" replace />} />
               </Routes>
             </RequireAdmin>

@@ -1,5 +1,6 @@
 import { Coffee, DoorOpen, Fingerprint, Hourglass, LogIn, LogOut, Timer } from 'lucide-react';
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
+import { LocationBadge } from '../components/location';
 import { InstallApp } from '../components/PwaPrompts';
 import { DayStatusBadge } from '../components/timesheet';
 import { useToast } from '../components/toast';
@@ -8,6 +9,7 @@ import { ApiError, errorMessage } from '../lib/api';
 import { useServerNow } from '../lib/clock';
 import { useAuth } from '../lib/auth';
 import { addDays, formatDuration, formatMinutes, timeOf, today } from '../lib/format';
+import { getDeviceLocation } from '../lib/geo';
 import { useOnline } from '../lib/pwa';
 import { useRegisterPunch, useTimesheet } from '../lib/queries';
 import type { RegisteredPunch } from '../lib/types';
@@ -182,6 +184,7 @@ export function ClockPage() {
   const sheet = useTimesheet({ from: addDays(localToday, -1), to: localToday });
   const register = useRegisterPunch();
   const [last, setLast] = useState<RegisteredPunch | null>(null);
+  const [locating, setLocating] = useState(false);
   const online = useOnline();
 
   const tz = sheet.data?.timezone;
@@ -209,13 +212,18 @@ export function ClockPage() {
         })
       : null;
 
-  const onPunch = () =>
-    register.mutate(undefined, {
+  const onPunch = async () => {
+    setLocating(true);
+    const location = await getDeviceLocation();
+    setLocating(false);
+    register.mutate(location, {
       onSuccess: (punch) => {
         setLast(punch);
         toast(`${punch.interpretedAs === 'entrada' ? 'Entrada' : 'Saída'} registrada às ${timeOf(punch.localTime)}`);
       },
     });
+  };
+  const busy = locating || register.isPending;
 
   const hour = Number(now.toLocaleString('en-US', { timeZone: tz, hour: 'numeric', hourCycle: 'h23' }));
   const [hh, mm, ss] = now.toLocaleTimeString('pt-BR', { timeZone: tz }).split(':');
@@ -264,15 +272,21 @@ export function ClockPage() {
               <button
                 type="button"
                 onClick={onPunch}
-                disabled={register.isPending || !online}
+                disabled={busy || !online}
                 className="group mt-10 flex h-16 w-full max-w-xs animate-pulse-ring items-center justify-center gap-3 rounded-2xl bg-brand-500 text-base font-semibold text-white shadow-lg shadow-brand-500/30 transition hover:bg-brand-400 active:scale-[0.98] disabled:animate-none disabled:opacity-70"
               >
-                {register.isPending ? (
+                {busy ? (
                   <Spinner className="size-5" />
                 ) : (
                   <Fingerprint className="size-6 transition-transform group-hover:scale-110" />
                 )}
-                {!online ? 'Sem conexão' : sheet.data ? `Registrar ${nextAction}` : 'Registrar ponto'}
+                {!online
+                  ? 'Sem conexão'
+                  : locating
+                    ? 'Obtendo localização…'
+                    : sheet.data
+                      ? `Registrar ${nextAction}`
+                      : 'Registrar ponto'}
               </button>
 
               <div className="mt-5 min-h-6 text-sm">
@@ -283,15 +297,24 @@ export function ClockPage() {
                       ' Confira o resumo de hoje antes de tentar de novo: a marcação pode ter sido registrada.'}
                   </p>
                 ) : last ? (
-                  <p className="text-emerald-300">
-                    ✓ {last.interpretedAs === 'entrada' ? 'Entrada' : 'Saída'} registrada às{' '}
-                    <strong className="text-white">{timeOf(last.localTime)}</strong>
-                  </p>
+                  <div className="space-y-2">
+                    <p className="text-emerald-300">
+                      ✓ {last.interpretedAs === 'entrada' ? 'Entrada' : 'Saída'} registrada às{' '}
+                      <strong className="text-white">{timeOf(last.localTime)}</strong>
+                    </p>
+                    {last.location && <LocationBadge location={last.location} />}
+                    {last.location?.status === 'UNAVAILABLE' && (
+                      <p className="mx-auto max-w-xs text-xs text-slate-400">
+                        Permita o acesso à localização nas configurações do navegador para as próximas marcações.
+                      </p>
+                    )}
+                  </div>
                 ) : null}
               </div>
 
               <p className="mt-4 max-w-sm text-xs text-slate-500">
-                O horário registrado é sempre o do servidor. Entrada e saída são definidas pela ordem das marcações.
+                O horário registrado é sempre o do servidor. Entrada e saída são definidas pela ordem das marcações. Sua
+                localização é registrada só no momento da marcação, nunca durante o dia.
               </p>
             </div>
           </div>

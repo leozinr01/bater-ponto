@@ -139,6 +139,39 @@ export class ReplacePunchDto {
   reason: string;
 }
 
+export class RegisterPunchDto {
+  @ApiPropertyOptional({ example: -23.55052 }) latitude?: number;
+  @ApiPropertyOptional({ example: -46.633308 }) longitude?: number;
+  @ApiPropertyOptional({
+    example: 15,
+    description: 'Margem de erro informada pelo aparelho, em metros',
+  })
+  accuracy?: number;
+}
+
+const LOCATION_STATUS_ENUM = ['INSIDE', 'OUTSIDE', 'UNAVAILABLE'];
+
+class PunchLocationDto {
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    enum: LOCATION_STATUS_ENUM,
+    description:
+      'INSIDE = no local; OUTSIDE = fora de todos os locais; UNAVAILABLE = sem localização; null = nenhum local cadastrado',
+  })
+  status: string | null;
+  @ApiProperty({ nullable: true, type: Number }) latitude: number | null;
+  @ApiProperty({ nullable: true, type: Number }) longitude: number | null;
+  @ApiProperty({ nullable: true, type: Number }) accuracyMeters: number | null;
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    description: 'Local mais próximo na hora da marcação',
+  })
+  workplaceName: string | null;
+  @ApiProperty({ nullable: true, type: Number }) distanceMeters: number | null;
+}
+
 export class PunchResponseDto {
   @ApiProperty() id: string;
   @ApiProperty() employeeId: string;
@@ -166,6 +199,13 @@ export class PunchResponseDto {
   @ApiProperty({ nullable: true, type: String }) voidedById: string | null;
   @ApiProperty({ nullable: true, type: String }) voidReason: string | null;
   @ApiProperty() createdAt: Date;
+  @ApiProperty({
+    type: PunchLocationDto,
+    nullable: true,
+    description:
+      'null = inclusão do admin ou marcação anterior à geolocalização',
+  })
+  location: PunchLocationDto | null;
 }
 
 export class RegisterPunchResponseDto extends PunchResponseDto {
@@ -188,6 +228,8 @@ class TimesheetPunchDto {
   @ApiProperty() id: string;
   @ApiProperty() timestamp: Date;
   @ApiProperty() localTime: string;
+  @ApiProperty({ nullable: true, type: String, enum: LOCATION_STATUS_ENUM })
+  locationStatus: string | null;
 }
 
 class TimesheetPeriodDto {
@@ -259,6 +301,8 @@ class TimesheetTotalsDto {
   excusedDays: number;
   @ApiProperty({ description: 'Dias com pelo menos um alerta' })
   alertDays: number;
+  @ApiProperty({ description: 'Marcações feitas fora dos locais de trabalho' })
+  outsideLocationPunches: number;
 }
 
 class TimesheetEmployeeDto {
@@ -320,6 +364,10 @@ class TodayEmployeeDto {
   @ApiProperty({ description: 'Minutos dos períodos já fechados' })
   workedMinutes: number;
   @ApiProperty({ nullable: true, type: Number }) lateMinutes: number | null;
+  @ApiProperty({ description: 'Marcações de hoje fora dos locais de trabalho' })
+  outsideLocationPunches: number;
+  @ApiProperty({ description: 'Marcações de hoje sem localização' })
+  noLocationPunches: number;
 }
 
 export class TodayResponseDto {

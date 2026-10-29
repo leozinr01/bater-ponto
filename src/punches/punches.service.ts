@@ -13,6 +13,8 @@ import {
 import { PrismaService } from '@/infra/database/prisma.service';
 import { EnvService } from '@/infra/env/env.service';
 import { loadScheduleHistory } from '@/work-schedules/schedule-history';
+import { evaluateLocation, parseDeviceLocation } from '@/workplaces/geo';
+import { WorkplacesService } from '@/workplaces/workplaces.service';
 import {
   BadRequestException,
   ConflictException,
@@ -73,13 +75,20 @@ export class PunchesService {
     private prisma: PrismaService,
     private holidays: HolidaysService,
     private absences: AbsencesService,
+    private workplaces: WorkplacesService,
     env: EnvService,
   ) {
     this.tz = env.get('APP_TIMEZONE');
   }
 
-  /** Marcação feita pelo próprio funcionário, com o horário do servidor. */
-  async register(user: AuthUser) {
+  /**
+   * Marcação feita pelo próprio funcionário, com o horário do servidor. A localização
+   * enviada pelo app só é avaliada (no local, fora do local, sem localização): nunca impede a marcação.
+   */
+  async register(user: AuthUser, body?: unknown) {
+    const location = parseDeviceLocation(body);
+    const evaluation = evaluateLocation(location, await this.workplaces.list());
+
     return this.prisma.$transaction(async (tx) => {
       await this.lockEmployee(tx, user.id);
       const now = new Date();
@@ -106,7 +115,17 @@ export class PunchesService {
       }
 
       const punch = await tx.punchClock.create({
-        data: { userId: user.id, timestamp: now, source: 'EMPLOYEE' },
+        data: {
+          userId: user.id,
+          timestamp: now,
+          source: 'EMPLOYEE',
+          latitude: location?.latitude,
+          longitude: location?.longitude,
+          accuracyMeters: location?.accuracyMeters,
+          locationStatus: evaluation.status,
+          workplaceName: evaluation.workplaceName,
+          distanceMeters: evaluation.distanceMeters,
+        },
       });
 
       const currentShift = groupIntoShifts([...recent, punch]).at(-1)!;
@@ -299,6 +318,8 @@ export class PunchesService {
       const first = day?.punches[0];
       const last = day?.punches.at(-1);
       const open = day?.periods.find((p) => p.end === null);
+      const countLocation = (status: string) =>
+        day?.punches.filter((p) => p.locationStatus === status).length ?? 0;
 
       return {
         employee: { id: employee.id, name: employee.name },
@@ -320,6 +341,8 @@ export class PunchesService {
         workingSince: open ? localDateTime(open.start, this.tz) : null,
         workedMinutes: day?.workedMinutes ?? 0,
         lateMinutes: day?.lateMinutes ?? null,
+        outsideLocationPunches: countLocation('OUTSIDE'),
+        noLocationPunches: countLocation('UNAVAILABLE'),
       };
     });
 
@@ -476,6 +499,12 @@ export class PunchesService {
       absences,
     });
 
+    const outsideLocationPunches = days.reduce(
+      (sum, day) =>
+        sum + day.punches.filter((p) => p.locationStatus === 'OUTSIDE').length,
+      0,
+    );
+
     return {
       employee: { id: employee.id, name: employee.name },
       timezone: this.tz,
@@ -488,6 +517,7 @@ export class PunchesService {
           id: p.id,
           timestamp: p.timestamp,
           localTime: localDateTime(p.timestamp, this.tz),
+          locationStatus: p.locationStatus ?? null,
         })),
         periods: day.periods.map((period) => ({
           start: localDateTime(period.start, this.tz),
@@ -495,7 +525,7 @@ export class PunchesService {
           minutes: period.minutes,
         })),
       })),
-      totals,
+      totals: { ...totals, outsideLocationPunches },
     };
   }
 
@@ -518,7 +548,7 @@ export class PunchesService {
           lt: zonedInstant(addDays(to, 2), '00:00', this.tz),
         },
       },
-      select: { id: true, userId: true, timestamp: true },
+      select: { id: true, userId: true, timestamp: true, locationStatus: true },
       orderBy: { timestamp: 'asc' },
     });
     const byEmployee = new Map<string, PunchInput[]>();
@@ -598,6 +628,17 @@ export class PunchesService {
       voidedById: punch.voidedById,
       voidReason: punch.voidReason,
       createdAt: punch.createdAt,
+      location:
+        punch.locationStatus === null && punch.latitude === null
+          ? null
+          : {
+              status: punch.locationStatus,
+              latitude: punch.latitude,
+              longitude: punch.longitude,
+              accuracyMeters: punch.accuracyMeters,
+              workplaceName: punch.workplaceName,
+              distanceMeters: punch.distanceMeters,
+            },
     };
   }
 }

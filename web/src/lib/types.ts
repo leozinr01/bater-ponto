@@ -53,7 +53,35 @@ export interface Punch {
   voidedById: string | null;
   voidReason: string | null;
   createdAt: string;
+  /** null = inclusão do admin ou marcação anterior à geolocalização. */
+  location: PunchLocation | null;
 }
+
+/** INSIDE = no local; OUTSIDE = fora de todos os locais; UNAVAILABLE = sem localização. */
+export type LocationStatus = 'INSIDE' | 'OUTSIDE' | 'UNAVAILABLE';
+
+export interface PunchLocation {
+  /** null = nenhum local de trabalho cadastrado na hora da marcação. */
+  status: LocationStatus | null;
+  latitude: number | null;
+  longitude: number | null;
+  accuracyMeters: number | null;
+  /** Local mais próximo na hora da marcação. */
+  workplaceName: string | null;
+  distanceMeters: number | null;
+}
+
+export interface Workplace {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  radiusMeters: number;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export type WorkplaceInput = Pick<Workplace, 'name' | 'latitude' | 'longitude' | 'radiusMeters'>;
 
 export interface RegisteredPunch extends Punch {
   interpretedAs: 'entrada' | 'saída';
@@ -74,7 +102,7 @@ export interface TimesheetDay {
   holiday: string | null;
   absence: { type: AbsenceType; reason: string } | null;
   status: DayStatus;
-  punches: { id: string; timestamp: string; localTime: string }[];
+  punches: { id: string; timestamp: string; localTime: string; locationStatus: LocationStatus | null }[];
   periods: { start: string; end: string | null; minutes: number }[];
   workedMinutes: number;
   breakMinutes: number;
@@ -97,6 +125,8 @@ export interface TimesheetTotals {
   absentDays: number;
   excusedDays: number;
   alertDays: number;
+  /** Marcações feitas fora dos locais de trabalho. */
+  outsideLocationPunches: number;
 }
 
 export interface Timesheet {
@@ -138,6 +168,10 @@ export interface TodayEmployee {
   workingSince: string | null;
   workedMinutes: number;
   lateMinutes: number | null;
+  /** Marcações de hoje fora dos locais de trabalho. */
+  outsideLocationPunches: number;
+  /** Marcações de hoje sem localização. */
+  noLocationPunches: number;
 }
 
 export interface TodayOverview {

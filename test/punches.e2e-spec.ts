@@ -379,6 +379,7 @@ describe('Ponto (e2e)', () => {
         absentDays: 1,
         excusedDays: 0,
         alertDays: 0,
+        outsideLocationPunches: 0,
       });
     });
 

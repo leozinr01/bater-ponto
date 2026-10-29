@@ -1,5 +1,6 @@
 import { Ban, History, PencilLine, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
+import { LocationBadge } from '../../components/location';
 import { Alert, Badge, Card, cn, EmptyState, Loading, Pagination, Segmented } from '../../components/ui';
 import { errorMessage } from '../../lib/api';
 import { dateOf, formatDate, formatDateTime, monthRange, timeOf, WEEKDAYS } from '../../lib/format';
@@ -48,6 +49,7 @@ function PunchRow({ punch }: { punch: Punch }) {
               Desconsiderada
             </Badge>
           )}
+          {punch.location && <LocationBadge location={punch.location} />}
         </div>
         {(punch.reason || punch.voided) && (
           <div className="mt-1 space-y-0.5 text-xs text-slate-400">
