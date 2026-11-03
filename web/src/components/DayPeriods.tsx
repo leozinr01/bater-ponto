@@ -45,7 +45,7 @@ function TimeChip({
  */
 export function PeriodPairs({ day, onEdit }: { day: TimesheetDay; onEdit?: (p: PunchRef) => void }) {
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className="flex flex-col items-start gap-1">
       {day.periods.map((p) => (
         <span
           key={p.start}
@@ -109,26 +109,23 @@ export function DayDetail({ day, date, future }: { day?: TimesheetDay; date: str
                 : 'Folga.'}
         </p>
       ) : (
-        <ol className="mt-2 space-y-1">
+        <ol className="mt-3 space-y-2">
           {day.periods.map((p, i) => {
             const next = day.periods[i + 1];
             return (
-              <li key={p.start} className="pt-4">
-                <div className="flex items-center gap-3 text-sm">
-                  <span className="w-12 font-semibold text-emerald-300 tabular-nums">{timeOf(p.start)}</span>
-                  <span className="relative h-1.5 flex-1 rounded-full bg-gradient-to-r from-emerald-500/60 to-red-500/60">
-                    <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[11px] whitespace-nowrap text-slate-400 tabular-nums">
-                      {p.end ? formatMinutes(p.minutes) : 'em andamento'}
-                    </span>
-                  </span>
-                  <span
-                    className={cn('w-12 text-right font-semibold tabular-nums', p.end ? 'text-red-300' : 'text-brand-300')}
-                  >
+              <li key={p.start}>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="font-semibold text-emerald-300 tabular-nums">{timeOf(p.start)}</span>
+                  <ArrowRight className="size-3.5 text-slate-600" />
+                  <span className={cn('font-semibold tabular-nums', p.end ? 'text-red-300' : 'text-brand-300')}>
                     {p.end ? timeOf(p.end) : 'agora'}
+                  </span>
+                  <span className="ml-auto text-xs text-slate-400 tabular-nums">
+                    {p.end ? formatMinutes(p.minutes) : 'em andamento'}
                   </span>
                 </div>
                 {p.end && next && (
-                  <p className="mt-2 flex items-center justify-center gap-1.5 text-[11px] text-amber-300/80">
+                  <p className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-500">
                     <Coffee className="size-3" />
                     Intervalo de{' '}
                     {formatMinutes(Math.round((new Date(next.start).getTime() - new Date(p.end).getTime()) / 60_000))}

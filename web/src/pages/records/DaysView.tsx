@@ -84,53 +84,56 @@ function DayRow({
         </span>
       </span>
 
-      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1.5">
+      <div className="min-w-0 flex-1 space-y-2">
         {day.periods.length > 0 && <PeriodPairs day={day} onEdit={canCorrect ? onEdit : undefined} />}
-        {day.holiday && day.punches.length > 0 && (
-          <span title={day.holiday}>
-            <Badge tone="brand">Feriado</Badge>
-          </span>
-        )}
-        <DayAlerts alerts={day.alerts} />
-        <DayLocationAlert day={day} />
-        {showStatus && (
-          <span className="flex items-center gap-2">
-            <DayStatusBadge day={day} />
-            {day.absence && !day.punches.length ? (
-              <span className="max-w-56 truncate text-[11px] text-slate-400" title={day.absence.reason}>
-                {day.absence.reason}
-              </span>
-            ) : (
-              day.holiday && !day.punches.length && <span className="text-[11px] text-slate-400">{day.holiday}</span>
-            )}
-            {day.lateMinutes ? <span className="text-[11px] text-amber-300">Atraso {formatMinutes(day.lateMinutes)}</span> : null}
-          </span>
-        )}
-        {!showStatus && day.lateMinutes ? (
-          <span className="text-[11px] text-amber-300">Atraso {formatMinutes(day.lateMinutes)}</span>
-        ) : null}
-        {canCorrect && (
-          <button
-            type="button"
-            onClick={onAdd}
-            title="Incluir marcação"
-            aria-label={`Incluir marcação em ${formatDate(day.date)}`}
-            className="flex size-7 items-center justify-center rounded-lg text-slate-500 opacity-60 ring-1 ring-white/10 ring-inset transition hover:bg-brand-500/15 hover:text-brand-200 hover:ring-brand-400/40 group-hover:opacity-100"
-          >
-            <Plus className="size-3.5" />
-          </button>
-        )}
-        {canCorrect && day.status === 'absent' && (
-          <button
-            type="button"
-            onClick={onExcuse}
-            title="Lançar atestado, férias ou abono"
-            className="flex h-7 items-center gap-1 rounded-lg px-2 text-[11px] font-medium text-sky-300 opacity-70 ring-1 ring-sky-400/25 ring-inset transition hover:bg-sky-500/10 group-hover:opacity-100"
-          >
-            <HeartPulse className="size-3.5" />
-            Abonar
-          </button>
-        )}
+        {/* Situação, alertas e ações ficam abaixo dos horários */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 empty:hidden">
+          {day.holiday && day.punches.length > 0 && (
+            <span title={day.holiday}>
+              <Badge tone="brand">Feriado</Badge>
+            </span>
+          )}
+          <DayAlerts alerts={day.alerts} />
+          <DayLocationAlert day={day} />
+          {showStatus && (
+            <span className="flex items-center gap-2">
+              <DayStatusBadge day={day} />
+              {day.absence && !day.punches.length ? (
+                <span className="max-w-56 truncate text-[11px] text-slate-400" title={day.absence.reason}>
+                  {day.absence.reason}
+                </span>
+              ) : (
+                day.holiday && !day.punches.length && <span className="text-[11px] text-slate-400">{day.holiday}</span>
+              )}
+              {day.lateMinutes ? <span className="text-[11px] text-amber-300">Atraso {formatMinutes(day.lateMinutes)}</span> : null}
+            </span>
+          )}
+          {!showStatus && day.lateMinutes ? (
+            <span className="text-[11px] text-amber-300">Atraso {formatMinutes(day.lateMinutes)}</span>
+          ) : null}
+          {canCorrect && (
+            <button
+              type="button"
+              onClick={onAdd}
+              title="Incluir marcação"
+              aria-label={`Incluir marcação em ${formatDate(day.date)}`}
+              className="flex size-7 items-center justify-center rounded-lg text-slate-500 opacity-60 ring-1 ring-white/10 ring-inset transition hover:bg-brand-500/15 hover:text-brand-200 hover:ring-brand-400/40 group-hover:opacity-100"
+            >
+              <Plus className="size-3.5" />
+            </button>
+          )}
+          {canCorrect && day.status === 'absent' && (
+            <button
+              type="button"
+              onClick={onExcuse}
+              title="Lançar atestado, férias ou abono"
+              className="flex h-7 items-center gap-1 rounded-lg px-2 text-[11px] font-medium text-sky-300 opacity-70 ring-1 ring-sky-400/25 ring-inset transition hover:bg-sky-500/10 group-hover:opacity-100"
+            >
+              <HeartPulse className="size-3.5" />
+              Abonar
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="shrink-0 text-right">
