@@ -18,7 +18,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export const ME_KEY = ['auth', 'me'];
 const USER_KEY = 'ponto.user';
 
-/** Último usuário carregado: sem internet, o app abre com ele em vez de esperar a rede. */
+/** Último usuário carregado: o app abre com ele na hora e confirma com a API em seguida. */
 function getCachedUser(): Employee | undefined {
   try {
     const raw = localStorage.getItem(USER_KEY);
@@ -39,7 +39,9 @@ function setCachedUser(user: Employee | null) {
 
 /** Apaga os dados da conta anterior, menos a consulta do usuário, que o AuthProvider observa. */
 function clearOtherQueries(queryClient: QueryClient) {
-  queryClient.removeQueries({ predicate: (query) => query.queryHash !== JSON.stringify(ME_KEY) });
+  queryClient.removeQueries({
+    predicate: ({ queryKey }) => !(queryKey[0] === ME_KEY[0] && queryKey[1] === ME_KEY[1]),
+  });
 }
 
 async function fetchMe() {
@@ -54,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const me = useQuery({
     queryKey: ME_KEY,
     queryFn: () => (getTokens() ? fetchMe() : null),
-    // Mostra o usuário guardado na hora e confirma com a API assim que houver conexão
+    // Mostra o usuário guardado na hora e confirma com a API
     initialData: () => (getTokens() ? getCachedUser() : undefined),
     initialDataUpdatedAt: 0,
     staleTime: 5 * 60_000,

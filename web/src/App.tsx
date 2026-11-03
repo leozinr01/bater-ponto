@@ -18,7 +18,6 @@ import { WorkplacesPage } from './pages/admin/WorkplacesPage';
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
-  const location = useLocation();
   if (loading) {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-ink-950">
@@ -27,7 +26,7 @@ function RequireAuth({ children }: { children: ReactNode }) {
       </div>
     );
   }
-  if (!user) return <Navigate to="/login" replace state={{ from: location }} />;
+  if (!user) return <Navigate to="/login" replace />;
   return children;
 }
 
