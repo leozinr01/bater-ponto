@@ -1,7 +1,6 @@
-import { ArrowRight, Coffee } from 'lucide-react';
-import { formatDate, formatMinutes, timeOf, WEEKDAYS } from '../lib/format';
+import { ArrowRight } from 'lucide-react';
+import { timeOf } from '../lib/format';
 import type { TimesheetDay } from '../lib/types';
-import { absenceLabels, Balance, DayStatusBadge } from './timesheet';
 import { cn } from './ui';
 
 export type PunchRef = { id: string; localTime: string };
@@ -23,8 +22,7 @@ function TimeChip({
   onEdit?: (p: PunchRef) => void;
 }) {
   const cls = cn(
-    'rounded-md px-1.5 py-0.5 font-semibold tabular-nums',
-    kind === 'in' ? 'text-emerald-300' : 'text-red-300',
+    'rounded-md px-1.5 py-0.5 font-semibold text-slate-100 tabular-nums',
     onEdit && punch && 'cursor-pointer ring-1 ring-transparent transition hover:bg-white/5 hover:ring-brand-400/50',
   );
   const label = `${kind === 'in' ? 'Entrada' : 'Saída'} ${time}`;
@@ -40,7 +38,7 @@ function TimeChip({
 }
 
 /**
- * Períodos do dia como pares "entrada → saída" (entrada verde, saída vermelha).
+ * Períodos do dia como pares "entrada → saída".
  * Com `onEdit`, cada horário abre a correção.
  */
 export function PeriodPairs({ day, onEdit }: { day: TimesheetDay; onEdit?: (p: PunchRef) => void }) {
@@ -63,79 +61,6 @@ export function PeriodPairs({ day, onEdit }: { day: TimesheetDay; onEdit?: (p: P
           )}
         </span>
       ))}
-    </div>
-  );
-}
-
-/** Detalhe de um dia: cada trecho trabalhado e os intervalos entre eles. */
-export function DayDetail({ day, date, future }: { day?: TimesheetDay; date: string; future: boolean }) {
-  const weekday = WEEKDAYS[new Date(`${date}T12:00:00Z`).getUTCDay()];
-
-  return (
-    <div className="animate-fade-in rounded-xl bg-white/[0.02] p-4 ring-1 ring-white/[0.06]">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-white">
-          {weekday}, {formatDate(date, false)}
-        </p>
-        <div className="flex items-center gap-3">
-          {day && day.punches.length > 0 && (
-            <span className="text-sm text-slate-400 tabular-nums">
-              <span className="font-semibold text-white">{formatMinutes(day.workedMinutes)}</span>
-              {Boolean(day.overtimeMinutes || day.deficitMinutes) && (
-                <span className="ml-2 text-xs">
-                  <Balance overtime={day.overtimeMinutes} deficit={day.deficitMinutes} />
-                </span>
-              )}
-            </span>
-          )}
-          {day && !future && <DayStatusBadge day={day} />}
-        </div>
-      </div>
-
-      {!day || day.punches.length === 0 ? (
-        <p className="mt-3 text-sm text-slate-500">
-          {future
-            ? 'Esse dia ainda não chegou.'
-            : !day
-              ? 'Esse dia é do mês anterior: veja nos registros dele.'
-              : day.absence
-              ? `${absenceLabels[day.absence.type]}: ${day.absence.reason}`
-              : day.holiday
-              ? `Feriado: ${day.holiday}.`
-              : day.status === 'absent'
-              ? 'Falta: nenhuma marcação num dia de trabalho.'
-              : day.scheduled
-                ? 'Nenhuma marcação.'
-                : 'Folga.'}
-        </p>
-      ) : (
-        <ol className="mt-3 space-y-2">
-          {day.periods.map((p, i) => {
-            const next = day.periods[i + 1];
-            return (
-              <li key={p.start}>
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="font-semibold text-emerald-300 tabular-nums">{timeOf(p.start)}</span>
-                  <ArrowRight className="size-3.5 text-slate-600" />
-                  <span className={cn('font-semibold tabular-nums', p.end ? 'text-red-300' : 'text-brand-300')}>
-                    {p.end ? timeOf(p.end) : 'agora'}
-                  </span>
-                  <span className="ml-auto text-xs text-slate-400 tabular-nums">
-                    {p.end ? formatMinutes(p.minutes) : 'em andamento'}
-                  </span>
-                </div>
-                {p.end && next && (
-                  <p className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-500">
-                    <Coffee className="size-3" />
-                    Intervalo de{' '}
-                    {formatMinutes(Math.round((new Date(next.start).getTime() - new Date(p.end).getTime()) / 60_000))}
-                  </p>
-                )}
-              </li>
-            );
-          })}
-        </ol>
-      )}
     </div>
   );
 }

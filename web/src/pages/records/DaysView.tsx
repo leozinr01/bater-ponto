@@ -7,10 +7,9 @@ import { PeriodPairs, type PunchRef } from '../../components/DayPeriods';
 import { DayLocationAlert } from '../../components/location';
 import { alertLabels, Balance, DayAlerts, DayStatusBadge } from '../../components/timesheet';
 import { Alert, Badge, Button, Card, cn, EmptyState, Loading, Segmented } from '../../components/ui';
-import { WeekStrip } from '../../components/WeekStrip';
 import { errorMessage } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
-import { currentMonth, formatDate, formatMinutes, monthRange, timeOf, today, WEEKDAYS } from '../../lib/format';
+import { formatDate, formatMinutes, monthRange, timeOf, today, WEEKDAYS } from '../../lib/format';
 import { useHourBank, useTimesheet } from '../../lib/queries';
 import type { TimesheetDay } from '../../lib/types';
 
@@ -278,12 +277,6 @@ export function DaysView({ employeeId, month }: { employeeId: string; month: str
 
       <AbsencesCard employeeId={employeeId || undefined} from={from} to={to} canManage={canCorrect} />
 
-      {month === currentMonth() && (
-        <div className="print:hidden">
-          <WeekStrip days={data.days} todayDate={todayDate} />
-        </div>
-      )}
-
       {/* Lista de dias, agrupada por semana */}
       <div className="print:hidden">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -321,43 +314,26 @@ export function DaysView({ employeeId, month }: { employeeId: string; month: str
           </Card>
         ) : (
           <div className="space-y-4">
-            {weeks.map(({ all, visible }) => {
-              const worked = all.reduce((acc, d) => acc + d.workedMinutes, 0);
-              const overtime = all.reduce((acc, d) => acc + (d.overtimeMinutes ?? 0), 0);
-              const deficit = all.reduce((acc, d) => acc + (d.deficitMinutes ?? 0), 0);
-              return (
-                <Card key={all[0].date} className="overflow-hidden">
-                  <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-2.5 sm:px-5">
-                    <p className="text-xs font-medium tracking-wide text-slate-400 uppercase">
-                      {weekLabel(all[0].date, all[all.length - 1].date)}
-                    </p>
-                    <p className="flex items-center gap-3 text-xs text-slate-500 tabular-nums">
-                      <span>
-                        <span className="font-semibold text-slate-200">{formatMinutes(worked)}</span> trabalhadas
-                      </span>
-                      {data.schedule && (overtime || deficit) ? (
-                        <span className="font-medium">
-                          <Balance overtime={overtime} deficit={deficit} />
-                        </span>
-                      ) : null}
-                    </p>
-                  </div>
-                  <ul className="divide-y divide-white/[0.04]">
-                    {visible.map((day) => (
-                      <DayRow
-                        key={day.date}
-                        day={day}
-                        isToday={day.date === todayDate}
-                        canCorrect={canCorrect}
-                        onEdit={setEditing}
-                        onAdd={() => setAdding(day.date)}
-                        onExcuse={() => setExcusing(day.date)}
-                      />
-                    ))}
-                  </ul>
-                </Card>
-              );
-            })}
+            {weeks.map(({ all, visible }) => (
+              <Card key={all[0].date} className="overflow-hidden">
+                <p className="border-b border-white/[0.06] px-4 py-2.5 text-xs font-medium tracking-wide text-slate-400 uppercase sm:px-5">
+                  {weekLabel(all[0].date, all[all.length - 1].date)}
+                </p>
+                <ul className="divide-y divide-white/[0.04]">
+                  {visible.map((day) => (
+                    <DayRow
+                      key={day.date}
+                      day={day}
+                      isToday={day.date === todayDate}
+                      canCorrect={canCorrect}
+                      onEdit={setEditing}
+                      onAdd={() => setAdding(day.date)}
+                      onExcuse={() => setExcusing(day.date)}
+                    />
+                  ))}
+                </ul>
+              </Card>
+            ))}
           </div>
         )}
       </div>
