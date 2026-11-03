@@ -2,12 +2,12 @@
 
 [![CI](https://github.com/leozinr01/bater-ponto/actions/workflows/ci.yml/badge.svg)](https://github.com/leozinr01/bater-ponto/actions/workflows/ci.yml)
 
-Controle de ponto da TAI Project: o funcionário bate o ponto pelo app (PWA instalável no celular), acompanha as horas do dia e do mês, e o administrador gerencia funcionários e jornadas, corrige marcações com justificativa e tira o relatório da equipe.
+Controle de ponto da TAI Project: o funcionário bate o ponto pelo app (no navegador do celular ou do computador), acompanha as horas do dia e do mês, e o administrador gerencia funcionários e jornadas, corrige marcações com justificativa e tira o relatório da equipe.
 
 | Parte | Pasta | Stack |
 | --- | --- | --- |
 | **API** | raiz (`src/`) | TypeScript · NestJS 11 · Prisma 6 (driver `pg`) · PostgreSQL · JWT · Swagger · Vitest |
-| **App (PWA)** | [`web/`](web/README.md) | React 19 · Vite · TypeScript · Tailwind CSS 4 · TanStack Query · vite-plugin-pwa |
+| **App** | [`web/`](web/README.md) | React 19 · Vite · TypeScript · Tailwind CSS 4 · TanStack Query |
 | **Banco** | `prisma/` | PostgreSQL (Supabase em produção, Postgres local ou Docker no desenvolvimento) |
 
 > ⚠️ **Antes de usar oficialmente**, leia [docs/CONFORMIDADE.md](docs/CONFORMIDADE.md). Este sistema **não está homologado** como REP-P da Portaria MTP nº 671/2021.
@@ -32,8 +32,6 @@ Controle de ponto da TAI Project: o funcionário bate o ponto pelo app (PWA inst
 - **Jornadas:** entrada prevista, carga diária, dias de trabalho e tolerâncias. Mudanças (na jornada ou na de um funcionário) valem a partir do dia em que são feitas: os meses anteriores não são recalculados.
 - **Correções** direto nos Registros de outro funcionário: incluir marcação faltante, trocar horário ou desconsiderar, sempre com justificativa.
 - **Abonos:** atestado, férias, afastamento ou abono de dias inteiros, lançados nos Registros (inclusive direto de um dia marcado como falta). Os dias de trabalho cobertos não geram falta nem horas previstas. Cancelar não apaga: o lançamento fica no histórico.
-
-**App instalável (PWA):** abre em tela cheia com barra de abas no celular, convite de instalação (inclusive passo a passo no iPhone), QR code para instalar a partir do computador e aviso de nova versão. Sem internet o app abre, mas o ponto fica bloqueado: o horário é sempre o do servidor. Detalhes em [web/README.md](web/README.md).
 
 ---
 
@@ -66,7 +64,7 @@ No **PowerShell**, o passo 5 fica assim:
 $env:ADMIN_NAME="Administrador"; $env:ADMIN_EMAIL="admin@empresa.com"; $env:ADMIN_PASSWORD="troque-esta-senha"; npm run admin:create
 ```
 
-Para apresentar o sistema com dados (opcional, **só em banco de desenvolvimento ou de demonstração**, nunca no de produção): `CONFIRM_DEMO_SEED=sim npm run seed:demo` cria 2 jornadas, os feriados nacionais e 8 funcionários fictícios (`@demo.local`, senha `demo1234`) com cerca de 2 meses de marcações variadas, um local de trabalho de exemplo (edite as coordenadas em **Locais**) e marcações com localização, algumas fora do local e outras sem GPS. No PowerShell: `$env:CONFIRM_DEMO_SEED="sim"; npm run seed:demo`.
+Para apresentar o sistema com dados (opcional, **só em banco de desenvolvimento ou de demonstração**, nunca no de produção): `CONFIRM_DEMO_SEED=sim npm run seed:demo` cria 2 jornadas, os feriados nacionais e 8 funcionários fictícios (`@demo.local`, senha `demo1234`) com cerca de 2 meses de marcações variadas, um local de trabalho de exemplo (edite as coordenadas em **Configurações > Locais**) e marcações com localização, algumas fora do local e outras sem GPS. No PowerShell: `$env:CONFIRM_DEMO_SEED="sim"; npm run seed:demo`.
 
 Depois, em dois terminais:
 
@@ -75,7 +73,7 @@ npm run start:dev          # API em http://localhost:3333/api (Swagger em /swagg
 npm run dev --prefix web   # App em http://localhost:5173
 ```
 
-O app encaminha `/api` para a API, então em desenvolvimento não é preciso configurar CORS. Para testar o **PWA instalável** (service worker), use o build de produção: `npm run build --prefix web && npm run preview --prefix web` → `http://localhost:4173`.
+O app encaminha `/api` para a API, então em desenvolvimento não é preciso configurar CORS.
 
 ### Variáveis de ambiente da API
 
@@ -128,13 +126,11 @@ Arquitetura recomendada:
 
 | Parte | Onde | Observações |
 | --- | --- | --- |
-| App (PWA) | Vercel, Netlify ou Cloudflare Pages | Raiz `web/`, build `npm run build`, saída `dist/`. Defina `VITE_API_URL` com o endereço da API. Configure a SPA para devolver `index.html` em qualquer rota |
+| App | Vercel, Netlify ou Cloudflare Pages | Raiz `web/`, build `npm run build`, saída `dist/`. Defina `VITE_API_URL` com o endereço da API. Configure a SPA para devolver `index.html` em qualquer rota |
 | API | Render, Railway, Fly.io ou VPS | `npm run build && npm run start:prod`. Mesma região do banco. Planos grátis que "dormem" deixam o primeiro ponto do dia lento |
 | Banco | Supabase | Ative backups antes do uso real |
 
 Na API de produção: `NODE_ENV=production`, `JWT_SECRET` forte e exclusivo, `CORS_ORIGIN` com o domínio do app e `npx prisma migrate deploy` a cada versão com migration nova.
-
-O PWA só pode ser instalado no celular com **HTTPS**, ou seja, depois do deploy. A partir daí o QR code de instalação (login e Minha conta) aponta sozinho para o endereço público.
 
 ---
 
@@ -230,10 +226,10 @@ src/                 API (NestJS)
   infra/             Prisma (driver pg) e variáveis de ambiente
 prisma/              schema, migrations e script de criação do admin
 test/                testes e2e
-web/                 app (PWA)
+web/                 app
   src/pages/         telas: ponto, registros, conta e admin/
-  src/components/    UI, layout, linha do tempo, correções, PWA
-  src/lib/           cliente HTTP, autenticação, consultas, datas, PWA
+  src/components/    UI, layout, linha do tempo, correções
+  src/lib/           cliente HTTP, autenticação, consultas, datas, geolocalização
   public/            ícones do app e SVGs de origem
 docs/                conformidade legal
 ```

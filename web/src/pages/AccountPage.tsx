@@ -1,7 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { CalendarClock, KeyRound, Mail, ShieldCheck, UserRound } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
-import { QrInstall } from '../components/QrInstall';
 import { useToast } from '../components/toast';
 import { Alert, Avatar, Badge, Button, Card, CardHeader, cn, Field, Input, PageHeader, Skeleton } from '../components/ui';
 import { api, errorMessage } from '../lib/api';
@@ -133,9 +132,6 @@ export function AccountPage() {
               )}
             </div>
           </Card>
-
-          {/* No computador: QR para levar o app para o celular */}
-          <QrInstall className="hidden lg:block" />
         </div>
 
         {/* Senha */}

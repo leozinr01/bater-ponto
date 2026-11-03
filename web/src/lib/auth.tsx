@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, type ReactNode } from 'react';
 import { api, getTokens, SESSION_EXPIRED_EVENT, setTokens } from './api';
 import type { Employee, Tokens } from './types';
@@ -37,6 +37,11 @@ function setCachedUser(user: Employee | null) {
   }
 }
 
+/** Apaga os dados da conta anterior, menos a consulta do usuário, que o AuthProvider observa. */
+function clearOtherQueries(queryClient: QueryClient) {
+  queryClient.removeQueries({ predicate: (query) => query.queryHash !== JSON.stringify(ME_KEY) });
+}
+
 async function fetchMe() {
   const user = await api<Employee>('/auth/me');
   setCachedUser(user);
@@ -59,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     setTokens(null);
     setCachedUser(null);
-    queryClient.clear();
+    clearOtherQueries(queryClient);
     queryClient.setQueryData(ME_KEY, null);
   };
 
@@ -75,8 +80,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       auth: false,
     });
     setTokens(tokens);
-    queryClient.clear();
-    await queryClient.fetchQuery({ queryKey: ME_KEY, queryFn: fetchMe });
+    clearOtherQueries(queryClient);
+    // Busca direto e grava: com fetchQuery, o "ninguém logado" (null) ainda contava como
+    // recente (staleTime) e era devolvido no lugar do usuário, deixando a tela no login
+    queryClient.setQueryData(ME_KEY, await fetchMe());
   };
 
   const user = me.data ?? null;

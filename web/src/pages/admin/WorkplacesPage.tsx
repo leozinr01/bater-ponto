@@ -3,7 +3,7 @@ import { useState, type FormEvent } from 'react';
 import { useToast } from '../../components/toast';
 import { Alert, Button, Card, EmptyState, Field, Input, Loading, Modal, PageHeader } from '../../components/ui';
 import { errorMessage } from '../../lib/api';
-import { formatDistance, getDeviceLocation, mapsUrl } from '../../lib/geo';
+import { formatDistance, locateDevice, locationProblemMessage, mapsUrl } from '../../lib/geo';
 import { useDeleteWorkplace, useSaveWorkplace, useWorkplaces } from '../../lib/queries';
 import type { Workplace } from '../../lib/types';
 
@@ -36,10 +36,10 @@ function WorkplaceFormModal({ workplace, onClose }: { workplace: Workplace | nul
   const useCurrentLocation = async () => {
     setLocating(true);
     setLocateError(null);
-    const location = await getDeviceLocation();
+    const { location, problem } = await locateDevice();
     setLocating(false);
     if (!location) {
-      setLocateError('Não foi possível obter a localização. Permita o acesso no navegador ou cole as coordenadas.');
+      setLocateError(`${locationProblemMessage(problem)} Ou cole as coordenadas.`);
       return;
     }
     setCoordinates(formatCoordinates(location.latitude, location.longitude));

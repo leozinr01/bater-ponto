@@ -1,14 +1,12 @@
 import {
-  CalendarClock,
-  CalendarHeart,
   ChartColumn,
   ClipboardList,
   Fingerprint,
   LayoutDashboard,
   LayoutGrid,
   LogOut,
-  MapPin,
   PiggyBank,
+  Settings,
   UserRound,
   Users,
   X,
@@ -17,7 +15,6 @@ import {
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
-import { InstallApp } from './PwaPrompts';
 import { Avatar, cn } from './ui';
 
 export const APP_NAME = 'Sistema de Ponto';
@@ -40,9 +37,7 @@ const adminLinks: NavEntry[] = [
   { to: '/admin/hoje', label: 'Hoje', icon: LayoutDashboard },
   { to: '/admin/relatorio', label: 'Relatório', icon: ChartColumn },
   { to: '/admin/funcionarios', label: 'Funcionários', icon: Users },
-  { to: '/admin/jornadas', label: 'Jornadas', icon: CalendarClock },
-  { to: '/admin/feriados', label: 'Feriados', icon: CalendarHeart },
-  { to: '/admin/locais', label: 'Locais', icon: MapPin },
+  { to: '/admin/configuracoes', label: 'Configurações', icon: Settings },
 ];
 
 /** Marca: monograma TAI + nome do sistema. */
@@ -116,10 +111,6 @@ function Sidebar() {
           </div>
         )}
       </nav>
-
-      <div className="px-3 pb-2">
-        <InstallApp variant="button" />
-      </div>
 
       <div className="border-t border-white/10 p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
         <div className="flex items-center gap-1">

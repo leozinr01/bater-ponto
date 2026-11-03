@@ -13,6 +13,7 @@ import { HolidaysPage } from './pages/admin/HolidaysPage';
 import { ReportPage } from './pages/admin/ReportPage';
 import { SchedulesPage } from './pages/admin/SchedulesPage';
 import { TodayPage } from './pages/admin/TodayPage';
+import { SettingsPage } from './pages/admin/SettingsPage';
 import { WorkplacesPage } from './pages/admin/WorkplacesPage';
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -69,9 +70,16 @@ export function App() {
                 <Route path="hoje" element={<TodayPage />} />
                 <Route path="relatorio" element={<ReportPage />} />
                 <Route path="funcionarios" element={<EmployeesPage />} />
-                <Route path="jornadas" element={<SchedulesPage />} />
-                <Route path="feriados" element={<HolidaysPage />} />
-                <Route path="locais" element={<WorkplacesPage />} />
+                <Route path="configuracoes" element={<SettingsPage />}>
+                  <Route path="jornadas" element={<SchedulesPage />} />
+                  <Route path="feriados" element={<HolidaysPage />} />
+                  <Route path="locais" element={<WorkplacesPage />} />
+                  <Route index element={<Navigate to="/admin/configuracoes/jornadas" replace />} />
+                </Route>
+                {/* Endereços antigos, de quando cada cadastro tinha item próprio no menu */}
+                <Route path="jornadas" element={<Navigate to="/admin/configuracoes/jornadas" replace />} />
+                <Route path="feriados" element={<Navigate to="/admin/configuracoes/feriados" replace />} />
+                <Route path="locais" element={<Navigate to="/admin/configuracoes/locais" replace />} />
                 <Route path="*" element={<Navigate to="hoje" replace />} />
               </Routes>
             </RequireAdmin>

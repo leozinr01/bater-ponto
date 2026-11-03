@@ -1,7 +1,6 @@
 import { Coffee, DoorOpen, Fingerprint, Hourglass, LogIn, LogOut, Timer } from 'lucide-react';
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { LocationBadge } from '../components/location';
-import { InstallApp } from '../components/PwaPrompts';
 import { DayStatusBadge } from '../components/timesheet';
 import { useToast } from '../components/toast';
 import { Card, cn, Skeleton, Spinner } from '../components/ui';
@@ -9,8 +8,8 @@ import { ApiError, errorMessage } from '../lib/api';
 import { useServerNow } from '../lib/clock';
 import { useAuth } from '../lib/auth';
 import { addDays, formatDuration, formatMinutes, timeOf, today } from '../lib/format';
-import { getDeviceLocation } from '../lib/geo';
-import { useOnline } from '../lib/pwa';
+import { locateDevice, locationProblemMessage, useLocationWarmUp, type LocationProblem } from '../lib/geo';
+import { useOnline } from '../lib/online';
 import { useRegisterPunch, useTimesheet } from '../lib/queries';
 import type { RegisteredPunch } from '../lib/types';
 
@@ -185,6 +184,9 @@ export function ClockPage() {
   const register = useRegisterPunch();
   const [last, setLast] = useState<RegisteredPunch | null>(null);
   const [locating, setLocating] = useState(false);
+  // Motivo de a última marcação ter ido sem localização
+  const [locationProblem, setLocationProblem] = useState<LocationProblem | null>(null);
+  const permission = useLocationWarmUp();
   const online = useOnline();
 
   const tz = sheet.data?.timezone;
@@ -214,11 +216,12 @@ export function ClockPage() {
 
   const onPunch = async () => {
     setLocating(true);
-    const location = await getDeviceLocation();
+    const { location, problem } = await locateDevice();
     setLocating(false);
     register.mutate(location, {
       onSuccess: (punch) => {
         setLast(punch);
+        setLocationProblem(problem);
         toast(`${punch.interpretedAs === 'entrada' ? 'Entrada' : 'Saída'} registrada às ${timeOf(punch.localTime)}`);
       },
     });
@@ -232,7 +235,6 @@ export function ClockPage() {
 
   return (
     <div className="space-y-5">
-      <InstallApp variant="card" />
       <div className="grid gap-5 xl:grid-cols-12">
         {/* Relógio e botão */}
         <div className="xl:col-span-7">
@@ -305,16 +307,21 @@ export function ClockPage() {
                     {last.location && <LocationBadge location={last.location} />}
                     {last.location?.status === 'UNAVAILABLE' && (
                       <p className="mx-auto max-w-xs text-xs text-slate-400">
-                        Permita o acesso à localização nas configurações do navegador para as próximas marcações.
+                        {locationProblemMessage(locationProblem ?? 'unavailable')}
                       </p>
                     )}
                   </div>
+                ) : permission === 'denied' ? (
+                  <p className="mx-auto max-w-xs text-xs text-amber-300">
+                    {locationProblemMessage('denied')} Sem ela, o ponto vale normalmente, mas fica com o alerta "sem
+                    localização".
+                  </p>
                 ) : null}
               </div>
 
               <p className="mt-4 max-w-sm text-xs text-slate-500">
                 O horário registrado é sempre o do servidor. Entrada e saída são definidas pela ordem das marcações. Sua
-                localização é registrada só no momento da marcação, nunca durante o dia.
+                localização é enviada só no momento da marcação, nunca durante o dia.
               </p>
             </div>
           </div>

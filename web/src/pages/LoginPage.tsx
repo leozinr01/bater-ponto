@@ -1,10 +1,7 @@
 import { CalendarDays, Lock, LogIn, ShieldCheck, Zap } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { APP_NAME, COMPANY, Logo } from '../components/Layout';
-import { PhoneMockup } from '../components/PhoneMockup';
-import { InstallApp } from '../components/PwaPrompts';
-import { QrInstall } from '../components/QrInstall';
 import { Alert, Button, Field, Input } from '../components/ui';
 import { errorMessage } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -18,14 +15,13 @@ const features = [
 export function LoginPage() {
   const { user, login } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const from = (location.state as { from?: { pathname: string } } | null)?.from?.pathname ?? '/';
-  if (user) return <Navigate to={from} replace />;
+  // Depois do login, sempre a tela de bater ponto
+  if (user) return <Navigate to="/" replace />;
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -33,7 +29,7 @@ export function LoginPage() {
     setSubmitting(true);
     try {
       await login(email, password);
-      navigate(from, { replace: true });
+      navigate('/', { replace: true });
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -57,15 +53,15 @@ export function LoginPage() {
         <div className="relative">
           <Logo size="lg" />
         </div>
-        <div className="relative my-auto flex flex-col items-center gap-10 py-8 xl:flex-row xl:items-center xl:justify-between xl:gap-12">
-          <div className="max-w-md text-center xl:text-left">
+        <div className="relative my-auto py-8">
+          <div className="max-w-md">
             <h1 className="text-4xl leading-tight font-bold tracking-tight text-white">
               Controle de ponto simples, preciso e confiável.
             </h1>
             <p className="mt-4 text-base text-slate-400">
               Tudo o que a equipe da {COMPANY} precisa para registrar e acompanhar a jornada de trabalho.
             </p>
-            <ul className="mt-10 hidden space-y-6 text-left xl:block">
+            <ul className="mt-10 space-y-6">
               {features.map(({ icon: IconCmp, title, text }) => (
                 <li key={title} className="flex gap-4">
                   <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white/5 text-brand-300 ring-1 ring-white/10">
@@ -78,10 +74,6 @@ export function LoginPage() {
                 </li>
               ))}
             </ul>
-            <QrInstall className="mt-8 hidden xl:block" />
-          </div>
-          <div className="shrink-0">
-            <PhoneMockup />
           </div>
         </div>
         <p className="relative text-xs text-slate-500">
@@ -94,9 +86,6 @@ export function LoginPage() {
         <div className="w-full max-w-sm">
           <div className="mb-10 lg:hidden">
             <Logo size="lg" />
-          </div>
-          <div className="mb-8 lg:hidden">
-            <InstallApp variant="card" force={new URLSearchParams(location.search).has('instalar')} />
           </div>
           <h2 className="text-2xl font-bold tracking-tight text-white">Bem-vindo de volta</h2>
           <p className="mt-1 text-sm text-slate-400">Entre com seu e-mail e senha para continuar.</p>

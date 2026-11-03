@@ -1,0 +1,33 @@
+import { NavLink, Outlet } from 'react-router-dom';
+import { cn } from '../../components/ui';
+
+const tabs = [
+  { to: 'jornadas', label: 'Jornadas' },
+  { to: 'feriados', label: 'Feriados' },
+  { to: 'locais', label: 'Locais' },
+];
+
+/** Cadastros usados no cálculo (jornadas, feriados e locais), agrupados em abas para enxugar o menu. */
+export function SettingsPage() {
+  return (
+    <>
+      <nav className="mb-6 flex gap-6 border-b border-white/[0.06] print:hidden">
+        {tabs.map((tab) => (
+          <NavLink
+            key={tab.to}
+            to={tab.to}
+            className={({ isActive }) =>
+              cn(
+                '-mb-px border-b-2 pb-3 text-sm font-medium transition-colors',
+                isActive ? 'border-brand-400 text-white' : 'border-transparent text-slate-500 hover:text-slate-300',
+              )
+            }
+          >
+            {tab.label}
+          </NavLink>
+        ))}
+      </nav>
+      <Outlet />
+    </>
+  );
+}

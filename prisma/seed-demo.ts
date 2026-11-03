@@ -23,7 +23,7 @@ const TZ = process.env.APP_TIMEZONE ?? 'America/Sao_Paulo';
 const DAYS_BACK = 60;
 const PASSWORD = 'demo1234';
 const EMAIL_DOMAIN = 'demo.local';
-/** Local de exemplo (Av. Paulista, São Paulo): ajuste na tela Locais. */
+/** Local de exemplo (Av. Paulista, São Paulo): ajuste em Configurações > Locais. */
 const WORKPLACE = {
   name: 'Escritório (demo)',
   latitude: -23.561414,
