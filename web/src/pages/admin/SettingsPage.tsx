@@ -11,7 +11,8 @@ const tabs = [
 export function SettingsPage() {
   return (
     <>
-      <nav className="mb-6 flex gap-6 border-b border-white/[0.06] print:hidden">
+      <p className="mb-3 text-[11px] font-semibold tracking-wider text-slate-500 uppercase print:hidden">Configurações</p>
+      <nav aria-label="Configurações" className="mb-6 flex gap-6 border-b border-white/[0.06] print:hidden">
         {tabs.map((tab) => (
           <NavLink
             key={tab.to}
