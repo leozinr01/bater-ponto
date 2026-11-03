@@ -17,6 +17,21 @@ export const absenceLabels: Record<AbsenceType, string> = {
   COMPENSATION: 'Folga de banco',
 };
 
+/** Situação do dia em texto (a mesma do selo), para exportação. */
+export function dayStatusLabel(day: TimesheetDay): string {
+  if (day.absence && day.punches.length === 0) return absenceLabels[day.absence.type];
+  if (day.holiday && day.punches.length === 0) return `Feriado: ${day.holiday}`;
+  if (day.status === 'complete' && day.punches.length === 0) return day.scheduled ? '–' : 'Folga';
+  return statusMap[day.status].label;
+}
+
+/** Saldo em texto: "+1:30", "-0:15", "0:00" ou "–" sem jornada. */
+export function balanceLabel(overtime: number | null, deficit: number | null): string {
+  if (overtime === null && deficit === null) return '–';
+  const balance = (overtime ?? 0) - (deficit ?? 0);
+  return `${balance > 0 ? '+' : ''}${formatMinutes(balance)}`;
+}
+
 export function DayStatusBadge({ day }: { day: TimesheetDay }) {
   if (day.absence && day.punches.length === 0) {
     return (

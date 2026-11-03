@@ -1,11 +1,10 @@
-import { ArrowRight, CalendarX, ChartColumn, Download, Hourglass, Timer, TriangleAlert } from 'lucide-react';
+import { ArrowRight, CalendarX, ChartColumn, Hourglass, Timer, TriangleAlert } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Balance } from '../../components/timesheet';
 import {
   Alert,
   Avatar,
-  Button,
   Card,
   cn,
   EmptyState,
@@ -19,10 +18,12 @@ import { api, errorMessage } from '../../lib/api';
 import { currentMonth, formatDate, formatMinutes, monthRange } from '../../lib/format';
 import { useReport } from '../../lib/queries';
 import type { Paginated, ReportItem } from '../../lib/types';
+import { ExportMenu } from '../../components/ExportMenu';
 import { MonthNav } from '../../components/MonthNav';
+import { exportTable, type ExportFormat } from '../../lib/export';
 
-/** Busca todas as páginas do relatório e baixa como CSV (abre no Excel). */
-async function exportCsv(from: string, to: string) {
+/** Busca todas as páginas do relatório e baixa como PDF ou CSV. */
+async function exportReport(from: string, to: string, format: ExportFormat) {
   const items: ReportItem[] = [];
   for (let page = 1; ; page++) {
     const res = await api<Paginated<ReportItem>>('/punches/report', { query: { from, to, page, pageSize: 100 } });
@@ -44,8 +45,7 @@ async function exportCsv(from: string, to: string) {
     'Banco de horas (acumulado)',
   ];
   const rows = items.map(({ employee, totals: t, hourBankMinutes }) => [
-    // Texto começando com = + - @ viraria fórmula no Excel; o apóstrofo o mantém como texto
-    /^[=+\-@\t\r]/.test(employee.name) ? `'${employee.name}` : employee.name,
+    employee.name,
     formatMinutes(t.workedMinutes),
     formatMinutes(t.expectedMinutes),
     formatMinutes(t.overtimeMinutes),
@@ -58,13 +58,13 @@ async function exportCsv(from: string, to: string) {
     t.outsideLocationPunches,
     formatMinutes(hourBankMinutes),
   ]);
-  const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\r\n');
-  const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `relatorio-ponto_${from}_${to}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  await exportTable(format, {
+    filename: `relatorio-ponto_${from}_${to}`,
+    title: 'Relatório do período',
+    subtitle: `${formatDate(from)} a ${formatDate(to)} · ${items.length} funcionário(s)`,
+    head: header,
+    rows,
+  });
 }
 
 const sum = (items: ReportItem[], pick: (i: ReportItem) => number | null) =>
@@ -78,11 +78,11 @@ export function ReportPage() {
   const { from, to } = monthRange(month);
   const report = useReport({ from, to, page });
 
-  const onExport = async () => {
+  const onExport = async (format: ExportFormat) => {
     setExporting(true);
     setExportError('');
     try {
-      await exportCsv(from, to);
+      await exportReport(from, to, format);
     } catch (err) {
       setExportError(errorMessage(err));
     } finally {
@@ -109,9 +109,7 @@ export function ReportPage() {
                 setPage(1);
               }}
             />
-            <Button variant="secondary" icon={Download} onClick={onExport} loading={exporting}>
-              Exportar CSV
-            </Button>
+            <ExportMenu onExport={onExport} loading={exporting} />
           </>
         }
       />

@@ -1,14 +1,53 @@
-import { ClipboardList, Printer } from 'lucide-react';
+import { ClipboardList } from 'lucide-react';
+import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { EmployeePicker } from '../components/EmployeePicker';
+import { ExportMenu } from '../components/ExportMenu';
 import { MonthNav } from '../components/MonthNav';
-import { Button, cn, PageHeader } from '../components/ui';
+import { alertLabels, balanceLabel, dayStatusLabel } from '../components/timesheet';
+import { useToast } from '../components/toast';
+import { cn, PageHeader } from '../components/ui';
+import { errorMessage } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { currentMonth } from '../lib/format';
+import { exportTable, type ExportFormat } from '../lib/export';
+import { currentMonth, formatDate, formatMinutes, monthRange, timeOf, WEEKDAYS } from '../lib/format';
+import { useTimesheet } from '../lib/queries';
+import type { Timesheet } from '../lib/types';
 import { DaysView } from './records/DaysView';
 import { PunchesView } from './records/PunchesView';
 
 type Tab = 'dias' | 'marcacoes';
+
+/** Espelho de ponto do mês em PDF ou CSV: uma linha por dia, como na impressão. */
+function exportTimesheet(format: ExportFormat, sheet: Timesheet, from: string, to: string) {
+  const slug = sheet.employee.name
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase();
+  return exportTable(format, {
+    filename: `espelho-ponto_${slug}_${from.slice(0, 7)}`,
+    title: `Espelho de ponto · ${sheet.employee.name}`,
+    subtitle: `${formatDate(from)} a ${formatDate(to)} · fuso ${sheet.timezone}`,
+    head: ['Dia', 'Marcações', 'Trabalhado', 'Intervalo', 'Atraso', 'Saldo', 'Situação'],
+    rows: sheet.days.map((d) => [
+      `${formatDate(d.date, false)} ${WEEKDAYS[d.weekday]}`,
+      d.punches.map((p) => timeOf(p.localTime)).join('  ') || '–',
+      d.punches.length ? formatMinutes(d.workedMinutes) : '–',
+      d.breakMinutes ? formatMinutes(d.breakMinutes) : '–',
+      d.lateMinutes ? formatMinutes(d.lateMinutes) : '–',
+      balanceLabel(d.overtimeMinutes, d.deficitMinutes),
+      [
+        dayStatusLabel(d),
+        d.absence?.reason,
+        ...d.alerts.map((a) => alertLabels[a].label),
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    ]),
+  });
+}
 
 /**
  * Registros do mês em duas visões: por dia (o espelho de ponto) e cada marcação
@@ -20,6 +59,23 @@ export function RecordsPage() {
   const month = params.get('mes') ?? currentMonth();
   const employeeId = (isAdmin && params.get('funcionario')) || '';
   const tab: Tab = params.get('aba') === 'marcacoes' ? 'marcacoes' : 'dias';
+  const { from, to } = monthRange(month);
+  // Mesma consulta da aba "Por dia": vem do cache, sem buscar de novo
+  const sheet = useTimesheet({ employeeId: employeeId || undefined, from, to });
+  const toast = useToast();
+  const [exporting, setExporting] = useState(false);
+
+  const onExport = async (format: ExportFormat) => {
+    if (!sheet.data) return;
+    setExporting(true);
+    try {
+      await exportTimesheet(format, sheet.data, from, to);
+    } catch (err) {
+      toast(errorMessage(err), 'error');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const setParam = (key: string, value: string) =>
     setParams(
@@ -41,11 +97,7 @@ export function RecordsPage() {
           <>
             {isAdmin && <EmployeePicker value={employeeId} onChange={(id) => setParam('funcionario', id)} />}
             <MonthNav month={month} onChange={(m) => setParam('mes', m === currentMonth() ? '' : m)} />
-            {tab === 'dias' && (
-              <Button variant="secondary" icon={Printer} onClick={() => window.print()} title="Imprimir espelho de ponto">
-                Imprimir
-              </Button>
-            )}
+            {tab === 'dias' && <ExportMenu onExport={onExport} loading={exporting} disabled={!sheet.data} />}
           </>
         }
       />
