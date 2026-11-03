@@ -110,6 +110,7 @@ npm run test:e2e       # e2e: API completa contra PostgreSQL real
 npm run test:all       # os dois
 npm run typecheck      # tipos da API
 npm run typecheck --prefix web   # tipos do app
+npm test --prefix web            # testes do app (login, localização)
 ```
 
 Os testes e2e usam o PostgreSQL de `DATABASE_URL`, mas cada arquivo cria um **schema próprio e temporário** (`test_<uuid>`), aplica as migrations reais e o remove no final. Os dados existentes não são tocados. O usuário do banco precisa de permissão para criar schemas. Prefira rodá-los contra um Postgres local.
