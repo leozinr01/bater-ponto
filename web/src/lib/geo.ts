@@ -25,6 +25,23 @@ const POSITION_OPTIONS: PositionOptions = {
 };
 
 /**
+ * Última posição obtida, com o horário. Guardada aqui porque nem todo navegador respeita
+ * o maximumAge (o Safari costuma ligar o GPS de novo), e a batida não deve esperar por isso.
+ */
+let lastPosition: { location: DeviceLocation; at: number } | null = null;
+
+function remember(coords: GeolocationCoordinates): DeviceLocation {
+  const location = { latitude: coords.latitude, longitude: coords.longitude, accuracy: coords.accuracy };
+  lastPosition = { location, at: Date.now() };
+  return location;
+}
+
+/** Só para testes. */
+export function resetLastPosition() {
+  lastPosition = null;
+}
+
+/**
  * Localização atual do aparelho, só no momento da marcação (não há rastreamento).
  * Nunca falha: permissão negada, sem GPS ou demora resultam em location null com o motivo,
  * e o ponto é registrado mesmo assim, com o alerta "sem localização".
@@ -33,16 +50,16 @@ export function locateDevice(): Promise<LocationResult> {
   // Navegadores só liberam a localização em HTTPS (ou localhost)
   if (!window.isSecureContext) return Promise.resolve({ location: null, problem: 'insecure' });
   if (!('geolocation' in navigator)) return Promise.resolve({ location: null, problem: 'unsupported' });
+  if (lastPosition && Date.now() - lastPosition.at < MAX_POSITION_AGE_MS) {
+    return Promise.resolve({ location: lastPosition.location, problem: null });
+  }
   return new Promise((resolve) => {
     // Alguns navegadores não chamam nenhum callback quando a permissão fica pendente
     const fallback = setTimeout(() => resolve({ location: null, problem: 'timeout' }), LOCATION_TIMEOUT_MS + 1000);
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
         clearTimeout(fallback);
-        resolve({
-          location: { latitude: coords.latitude, longitude: coords.longitude, accuracy: coords.accuracy },
-          problem: null,
-        });
+        resolve({ location: remember(coords), problem: null });
       },
       (error) => {
         clearTimeout(fallback);
@@ -63,7 +80,7 @@ export function locationProblemMessage(problem: LocationProblem) {
     case 'unsupported':
       return 'Este navegador não informa a localização.';
     case 'denied':
-      return 'O acesso à localização está bloqueado. Permita nas configurações do navegador (ícone ao lado do endereço do site).';
+      return 'O acesso à localização está bloqueado. Permita nas configurações do site no navegador (no computador, pelo cadeado ao lado do endereço) e confira se a localização do aparelho está ligada.';
     case 'timeout':
       return 'O GPS demorou para responder. Confira se a localização do aparelho está ligada.';
     case 'unavailable':
@@ -74,21 +91,31 @@ export function locationProblemMessage(problem: LocationProblem) {
 export type LocationPermission = PermissionState | 'unknown';
 
 /**
- * Prepara a localização enquanto a tela de ponto está aberta: pede a permissão logo de cara
- * (em vez de no meio da batida) e deixa uma posição recente pronta, para a marcação não esperar o GPS.
- * Também acompanha a permissão, para avisar antes da batida se ela estiver bloqueada.
+ * Prepara a localização enquanto a tela de ponto está aberta, para a batida não esperar o GPS,
+ * e acompanha a permissão, para avisar antes da batida se ela estiver bloqueada.
+ * Só liga o GPS sozinho com a permissão já concedida: pedir permissão sem um clique faz o Chrome
+ * esconder o pedido. Sem permissão ainda, o pedido aparece no clique de bater o ponto.
  */
 export function useLocationWarmUp(): LocationPermission {
   const [permission, setPermission] = useState<LocationPermission>('unknown');
 
   useEffect(() => {
-    if (!window.isSecureContext || !('geolocation' in navigator)) return;
+    if (!window.isSecureContext || !('geolocation' in navigator) || !navigator.permissions) return;
     let status: PermissionStatus | null = null;
     let cancelled = false;
-    const update = () => status && setPermission(status.state);
+
+    const warmUp = () => {
+      if (status?.state !== 'granted' || document.visibilityState !== 'visible') return;
+      navigator.geolocation.getCurrentPosition(({ coords }) => remember(coords), () => {}, POSITION_OPTIONS);
+    };
+    const update = () => {
+      if (!status) return;
+      setPermission(status.state);
+      warmUp();
+    };
 
     navigator.permissions
-      ?.query({ name: 'geolocation' })
+      .query({ name: 'geolocation' })
       .then((result) => {
         if (cancelled) return;
         status = result;
@@ -96,17 +123,7 @@ export function useLocationWarmUp(): LocationPermission {
         result.addEventListener('change', update);
       })
       .catch(() => {});
-
-    const warmUp = () => {
-      if (document.visibilityState !== 'visible') return;
-      navigator.geolocation.getCurrentPosition(
-        () => setPermission((p) => (p === 'unknown' ? 'granted' : p)),
-        (error) => error.code === error.PERMISSION_DENIED && setPermission('denied'),
-        POSITION_OPTIONS,
-      );
-    };
-    // Só ao abrir a tela e ao voltar para ela (nada é enviado ao servidor): sem rastreamento contínuo
-    warmUp();
+    // Ao voltar para a tela (nada é enviado ao servidor): sem rastreamento contínuo
     document.addEventListener('visibilitychange', warmUp);
 
     return () => {
