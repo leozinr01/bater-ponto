@@ -57,8 +57,8 @@ export interface Punch {
   location: PunchLocation | null;
 }
 
-/** INSIDE = no local; OUTSIDE = fora de todos os locais; UNAVAILABLE = sem localização. */
-export type LocationStatus = 'INSIDE' | 'OUTSIDE' | 'UNAVAILABLE';
+/** INSIDE = no local; OUTSIDE = fora de todos os locais; IMPRECISE = margem de erro grande demais para saber; UNAVAILABLE = sem localização. */
+export type LocationStatus = 'INSIDE' | 'OUTSIDE' | 'IMPRECISE' | 'UNAVAILABLE';
 
 export interface PunchLocation {
   /** null = nenhum local de trabalho cadastrado na hora da marcação. */
@@ -171,6 +171,8 @@ export interface TodayEmployee {
   /** Marcações de hoje fora dos locais de trabalho. */
   outsideLocationPunches: number;
   /** Marcações de hoje sem localização. */
+  /** Horário (HH:mm) de cada marcação de hoje fora dos locais. */
+  outsideLocationTimes: string[];
   noLocationPunches: number;
 }
 

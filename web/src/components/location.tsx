@@ -16,6 +16,12 @@ export function LocationBadge({ location }: { location: PunchLocation }) {
         Fora do local
         {distanceMeters !== null && workplaceName ? ` (${formatDistance(distanceMeters)} de ${workplaceName})` : ''}
       </Badge>
+    ) : status === 'IMPRECISE' ? (
+      <span title="A margem de erro da localização foi grande demais para dizer se estava no local (comum no computador, que é localizado pela rede)">
+        <Badge tone="amber" dot>
+          Localização imprecisa{accuracyMeters !== null ? ` (±${formatDistance(accuracyMeters)})` : ''}
+        </Badge>
+      </span>
     ) : status === 'UNAVAILABLE' ? (
       <span title="O aparelho não enviou a localização: permissão negada, GPS desligado ou sem sinal">
         <Badge>Sem localização</Badge>

@@ -19,7 +19,7 @@ export interface WorkplaceArea extends GeoPoint {
   radiusMeters: number;
 }
 
-export type LocationStatus = 'INSIDE' | 'OUTSIDE' | 'UNAVAILABLE';
+export type LocationStatus = 'INSIDE' | 'OUTSIDE' | 'IMPRECISE' | 'UNAVAILABLE';
 
 export interface LocationEvaluation {
   status: LocationStatus | null;
@@ -51,7 +51,10 @@ export function distanceMeters(a: GeoPoint, b: GeoPoint): number {
 
 /**
  * Sem localização = UNAVAILABLE; sem local cadastrado = status null (não há o que comparar);
- * senão INSIDE se estiver no raio de algum local, descontada a margem de erro, ou OUTSIDE.
+ * senão INSIDE se estiver no raio de algum local, descontada a margem de erro (até o limite).
+ * Se não, IMPRECISE quando a margem de erro inteira ainda alcança algum local (ex.: computador
+ * localizado pela rede, com quilômetros de erro): não dá para dizer que a pessoa estava fora.
+ * OUTSIDE só quando está longe mesmo contando todo o erro.
  * O local informado é o mais próximo, com a distância até o centro dele.
  */
 export function evaluateLocation(
@@ -71,16 +74,20 @@ export function evaluateLocation(
   );
   let nearest: { workplace: WorkplaceArea; distance: number } | null = null;
   let inside = false;
+  let withinError = false;
   for (const workplace of workplaces) {
     const distance = distanceMeters(location, workplace);
     if (distance - slack <= workplace.radiusMeters) inside = true;
+    if (distance - (location.accuracyMeters ?? 0) <= workplace.radiusMeters) {
+      withinError = true;
+    }
     if (!nearest || distance < nearest.distance) {
       nearest = { workplace, distance };
     }
   }
 
   return {
-    status: inside ? 'INSIDE' : 'OUTSIDE',
+    status: inside ? 'INSIDE' : withinError ? 'IMPRECISE' : 'OUTSIDE',
     workplaceName: nearest!.workplace.name,
     distanceMeters: Math.round(nearest!.distance),
   };

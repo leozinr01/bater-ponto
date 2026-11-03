@@ -70,7 +70,24 @@ describe('evaluateLocation', () => {
     expect(
       evaluateLocation(at(150 + MAX_ACCURACY_SLACK_METERS + 50, 5000), [office])
         .status,
-    ).toBe('OUTSIDE');
+    ).not.toBe('INSIDE');
+  });
+
+  it('margem de erro que ainda alcança o local = IMPRECISE, não "fora"', () => {
+    // Computador localizado pela rede: ~650 m do escritório com 10,8 km de erro
+    expect(evaluateLocation(at(650, 10_800), [office])).toEqual({
+      status: 'IMPRECISE',
+      workplaceName: 'Matriz',
+      distanceMeters: 650,
+    });
+    // Sem a margem informada, não há como saber: vale a distância
+    expect(evaluateLocation(at(650, null), [office]).status).toBe('OUTSIDE');
+  });
+
+  it('longe mesmo contando todo o erro = OUTSIDE', () => {
+    expect(evaluateLocation(at(46_000, 10_800), [office]).status).toBe(
+      'OUTSIDE',
+    );
   });
 
   it('basta estar no raio de um dos locais', () => {

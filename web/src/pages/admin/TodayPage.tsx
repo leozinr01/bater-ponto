@@ -107,16 +107,16 @@ function EmployeeRow({ item, now }: { item: TodayEmployee; now: number }) {
         </Badge>
         {item.lateMinutes ? <span className="text-[11px] text-amber-300">+{formatMinutes(item.lateMinutes)}</span> : null}
         {item.outsideLocationPunches > 0 && (
-          <span title="Marcações de hoje feitas fora dos locais de trabalho. Veja o mapa nos registros.">
+          <span title="Marcação de hoje feita fora dos locais de trabalho. Veja o mapa nos registros.">
             <Badge tone="red">
               <MapPinOff className="size-3" />
-              Fora do local{item.outsideLocationPunches > 1 ? ` (${item.outsideLocationPunches})` : ''}
+              Fora do local às {item.outsideLocationTimes.join(', ')}
             </Badge>
           </span>
         )}
         {item.noLocationPunches > 0 && (
-          <span title="Marcações de hoje sem localização: permissão negada, GPS desligado ou sem sinal">
-            <Badge>Sem localização</Badge>
+          <span title="Marcações de hoje sem localização (permissão negada, GPS desligado ou sem sinal) ou com margem de erro grande demais para avaliar, como no computador">
+            <Badge>Sem localização precisa</Badge>
           </span>
         )}
       </div>

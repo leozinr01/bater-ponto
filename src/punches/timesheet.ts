@@ -34,7 +34,7 @@ export interface PunchInput {
   id: string;
   timestamp: Date;
   /** Só repassado para a tela: não entra no cálculo. */
-  locationStatus?: 'INSIDE' | 'OUTSIDE' | 'UNAVAILABLE' | null;
+  locationStatus?: 'INSIDE' | 'OUTSIDE' | 'IMPRECISE' | 'UNAVAILABLE' | null;
 }
 
 export interface ScheduleInput {

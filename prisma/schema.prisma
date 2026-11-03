@@ -163,6 +163,8 @@ model Workplace {
 enum PunchLocationStatus {
   INSIDE
   OUTSIDE
+  /// Margem de erro do GPS tão grande que não dá para dizer se estava no local
+  IMPRECISE
   UNAVAILABLE
 }
 

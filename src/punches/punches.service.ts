@@ -318,8 +318,9 @@ export class PunchesService {
       const first = day?.punches[0];
       const last = day?.punches.at(-1);
       const open = day?.periods.find((p) => p.end === null);
-      const countLocation = (status: string) =>
-        day?.punches.filter((p) => p.locationStatus === status).length ?? 0;
+      const withLocation = (...statuses: string[]) =>
+        day?.punches.filter((p) => statuses.includes(p.locationStatus ?? '')) ?? [];
+      const outside = withLocation('OUTSIDE');
 
       return {
         employee: { id: employee.id, name: employee.name },
@@ -341,8 +342,12 @@ export class PunchesService {
         workingSince: open ? localDateTime(open.start, this.tz) : null,
         workedMinutes: day?.workedMinutes ?? 0,
         lateMinutes: day?.lateMinutes ?? null,
-        outsideLocationPunches: countLocation('OUTSIDE'),
-        noLocationPunches: countLocation('UNAVAILABLE'),
+        outsideLocationPunches: outside.length,
+        // Horário de cada uma: o alerta pode ser de uma marcação do meio do dia, não da última
+        outsideLocationTimes: outside.map((p) =>
+          localDateTime(p.timestamp, this.tz).slice(11, 16),
+        ),
+        noLocationPunches: withLocation('UNAVAILABLE', 'IMPRECISE').length,
       };
     });
 

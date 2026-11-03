@@ -149,7 +149,7 @@ export class RegisterPunchDto {
   accuracy?: number;
 }
 
-const LOCATION_STATUS_ENUM = ['INSIDE', 'OUTSIDE', 'UNAVAILABLE'];
+const LOCATION_STATUS_ENUM = ['INSIDE', 'OUTSIDE', 'IMPRECISE', 'UNAVAILABLE'];
 
 class PunchLocationDto {
   @ApiProperty({
@@ -157,7 +157,7 @@ class PunchLocationDto {
     type: String,
     enum: LOCATION_STATUS_ENUM,
     description:
-      'INSIDE = no local; OUTSIDE = fora de todos os locais; UNAVAILABLE = sem localização; null = nenhum local cadastrado',
+      'INSIDE = no local; OUTSIDE = fora de todos os locais; IMPRECISE = margem de erro grande demais para saber; UNAVAILABLE = sem localização; null = nenhum local cadastrado',
   })
   status: string | null;
   @ApiProperty({ nullable: true, type: Number }) latitude: number | null;
@@ -366,7 +366,16 @@ class TodayEmployeeDto {
   @ApiProperty({ nullable: true, type: Number }) lateMinutes: number | null;
   @ApiProperty({ description: 'Marcações de hoje fora dos locais de trabalho' })
   outsideLocationPunches: number;
-  @ApiProperty({ description: 'Marcações de hoje sem localização' })
+  @ApiProperty({
+    type: [String],
+    example: ['08:57'],
+    description: 'Horário (HH:mm) de cada marcação de hoje fora dos locais',
+  })
+  outsideLocationTimes: string[];
+  @ApiProperty({
+    description:
+      'Marcações de hoje sem localização ou com localização imprecisa demais para avaliar',
+  })
   noLocationPunches: number;
 }
 
