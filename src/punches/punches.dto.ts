@@ -139,6 +139,15 @@ export class ReplacePunchDto {
   reason: string;
 }
 
+class OfflinePunchDto {
+  @ApiProperty({
+    format: 'uuid',
+    description: 'Gerado pelo aparelho: reenviar o mesmo não duplica',
+  })
+  clientId: string;
+  @ApiProperty({ example: '2026-11-09T08:01:00-03:00' }) at: string;
+}
+
 export class RegisterPunchDto {
   @ApiPropertyOptional({ example: -23.55052 }) latitude?: number;
   @ApiPropertyOptional({ example: -46.633308 }) longitude?: number;
@@ -147,6 +156,12 @@ export class RegisterPunchDto {
     description: 'Margem de erro informada pelo aparelho, em metros',
   })
   accuracy?: number;
+  @ApiPropertyOptional({
+    type: OfflinePunchDto,
+    description:
+      'Batida feita sem internet e enviada depois: vale o horário do aparelho (até 72h atrás)',
+  })
+  offline?: OfflinePunchDto;
 }
 
 const LOCATION_STATUS_ENUM = ['INSIDE', 'OUTSIDE', 'IMPRECISE', 'UNAVAILABLE'];
@@ -170,6 +185,12 @@ class PunchLocationDto {
   })
   workplaceName: string | null;
   @ApiProperty({ nullable: true, type: Number }) distanceMeters: number | null;
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    description: 'Endereço aproximado (OpenStreetMap) na hora da marcação',
+  })
+  address: string | null;
 }
 
 export class PunchResponseDto {
@@ -194,6 +215,8 @@ export class PunchResponseDto {
     description: 'Marcação substituída por esta',
   })
   replacesId: string | null;
+  @ApiProperty({ description: 'Feita sem internet: horário do aparelho' })
+  offline: boolean;
   @ApiProperty() voided: boolean;
   @ApiProperty({ nullable: true, type: Date }) voidedAt: Date | null;
   @ApiProperty({ nullable: true, type: String }) voidedById: string | null;
@@ -230,6 +253,8 @@ class TimesheetPunchDto {
   @ApiProperty() localTime: string;
   @ApiProperty({ nullable: true, type: String, enum: LOCATION_STATUS_ENUM })
   locationStatus: string | null;
+  @ApiProperty({ description: 'Feita sem internet: horário do aparelho' })
+  offline: boolean;
 }
 
 class TimesheetPeriodDto {
@@ -272,6 +297,11 @@ class TimesheetDayDto {
   @ApiProperty({ nullable: true, type: Number }) expectedMinutes: number | null;
   @ApiProperty({ nullable: true, type: Number }) lateMinutes: number | null;
   @ApiProperty({ nullable: true, type: Number }) overtimeMinutes: number | null;
+  @ApiProperty({
+    enum: [50, 100],
+    description: 'Adicional da hora extra do dia: 100% em domingo e feriado',
+  })
+  overtimeRate: 50 | 100;
   @ApiProperty({ nullable: true, type: Number }) deficitMinutes: number | null;
   @ApiProperty({ description: 'Carga consumida do banco por folga de banco' })
   compensatedMinutes: number;
@@ -289,6 +319,18 @@ class TimesheetTotalsDto {
   @ApiProperty({ nullable: true, type: Number }) expectedMinutes: number | null;
   @ApiProperty({ nullable: true, type: Number }) lateMinutes: number | null;
   @ApiProperty({ nullable: true, type: Number }) overtimeMinutes: number | null;
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description: 'Extras com adicional de 50%',
+  })
+  overtime50Minutes: number | null;
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description: 'Extras com adicional de 100% (domingo e feriado)',
+  })
+  overtime100Minutes: number | null;
   @ApiProperty({ nullable: true, type: Number }) deficitMinutes: number | null;
   @ApiProperty({ description: 'Carga consumida do banco por folgas de banco' })
   compensatedMinutes: number;

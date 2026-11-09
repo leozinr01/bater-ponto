@@ -1,6 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { CalendarClock, KeyRound, Mail, ShieldCheck, UserRound } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
+import { RemindersCard } from '../components/RemindersCard';
 import { useToast } from '../components/toast';
 import { Alert, Avatar, Badge, Button, Card, CardHeader, cn, Field, Input, PageHeader, Skeleton } from '../components/ui';
 import { api, errorMessage } from '../lib/api';
@@ -132,6 +133,8 @@ export function AccountPage() {
               )}
             </div>
           </Card>
+
+          <RemindersCard />
         </div>
 
         {/* Senha */}

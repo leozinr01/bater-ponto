@@ -7,6 +7,7 @@ import { HolidaysModule } from './holidays/holidays.module';
 import { DatabaseModule } from './infra/database/database.module';
 import { envSchema } from './infra/env/env';
 import { PunchesModule } from './punches/punches.module';
+import { PushModule } from './push/push.module';
 import { WorkSchedulesModule } from './work-schedules/work-schedules.module';
 import { WorkplacesModule } from './workplaces/workplaces.module';
 
@@ -24,6 +25,7 @@ import { WorkplacesModule } from './workplaces/workplaces.module';
     AbsencesModule,
     WorkplacesModule,
     PunchesModule,
+    PushModule,
   ],
 })
 export class AppModule {}

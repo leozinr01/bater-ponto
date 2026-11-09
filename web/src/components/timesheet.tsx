@@ -25,13 +25,6 @@ export function dayStatusLabel(day: TimesheetDay): string {
   return statusMap[day.status].label;
 }
 
-/** Saldo em texto: "+1:30", "-0:15", "0:00" ou "–" sem jornada. */
-export function balanceLabel(overtime: number | null, deficit: number | null): string {
-  if (overtime === null && deficit === null) return '–';
-  const balance = (overtime ?? 0) - (deficit ?? 0);
-  return `${balance > 0 ? '+' : ''}${formatMinutes(balance)}`;
-}
-
 export function DayStatusBadge({ day }: { day: TimesheetDay }) {
   if (day.absence && day.punches.length === 0) {
     return (

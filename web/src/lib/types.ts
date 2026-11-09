@@ -53,6 +53,8 @@ export interface Punch {
   voidedById: string | null;
   voidReason: string | null;
   createdAt: string;
+  /** Feita sem internet e enviada depois: vale o horário do aparelho. */
+  offline: boolean;
   /** null = inclusão do admin ou marcação anterior à geolocalização. */
   location: PunchLocation | null;
 }
@@ -69,6 +71,8 @@ export interface PunchLocation {
   /** Local mais próximo na hora da marcação. */
   workplaceName: string | null;
   distanceMeters: number | null;
+  /** Endereço aproximado (OpenStreetMap) na hora da marcação. */
+  address: string | null;
 }
 
 export interface Workplace {
@@ -87,6 +91,16 @@ export interface RegisteredPunch extends Punch {
   interpretedAs: 'entrada' | 'saída';
 }
 
+/** Batida feita sem internet, guardada no aparelho até ser enviada. */
+export interface QueuedPunch {
+  clientId: string;
+  /** Horário do aparelho (ISO). */
+  at: string;
+  latitude?: number;
+  longitude?: number;
+  accuracy?: number;
+}
+
 export type DayStatus = 'complete' | 'incomplete' | 'in_progress' | 'absent';
 
 /** Alertas da CLT: intervalo curto (art. 71), mais de 2h extras (art. 59), descanso < 11h (art. 66). */
@@ -102,13 +116,22 @@ export interface TimesheetDay {
   holiday: string | null;
   absence: { type: AbsenceType; reason: string } | null;
   status: DayStatus;
-  punches: { id: string; timestamp: string; localTime: string; locationStatus: LocationStatus | null }[];
+  punches: {
+    id: string;
+    timestamp: string;
+    localTime: string;
+    locationStatus: LocationStatus | null;
+    /** Feita sem internet (horário do aparelho). */
+    offline: boolean;
+  }[];
   periods: { start: string; end: string | null; minutes: number }[];
   workedMinutes: number;
   breakMinutes: number;
   expectedMinutes: number | null;
   lateMinutes: number | null;
   overtimeMinutes: number | null;
+  /** Adicional da hora extra: 100% em domingos e feriados, 50% nos demais dias. */
+  overtimeRate: 50 | 100;
   deficitMinutes: number | null;
   compensatedMinutes: number;
   alerts: DayAlert[];
@@ -119,6 +142,9 @@ export interface TimesheetTotals {
   expectedMinutes: number | null;
   lateMinutes: number | null;
   overtimeMinutes: number | null;
+  /** Extras separadas pelo adicional (somam overtimeMinutes). */
+  overtime50Minutes: number | null;
+  overtime100Minutes: number | null;
   deficitMinutes: number | null;
   compensatedMinutes: number;
   incompleteDays: number;
@@ -200,11 +226,21 @@ export interface Absence {
   canceledById: string | null;
 }
 
+/**
+ * Movimento do banco: extras de dias úteis entram 1:1; sábado paga o negativo com fator 1,5
+ * e o que sobra vai para a folha (50%); domingo e feriado vão para a folha (100%).
+ */
 export interface HourBankMovement {
+  /** Extras de dias úteis creditadas no banco. */
   overtimeMinutes: number;
   deficitMinutes: number;
   compensatedMinutes: number;
   adjustmentMinutes: number;
+  /** Crédito vindo do sábado (já ×1,5) para pagar horas negativas. */
+  saturdayCreditMinutes: number;
+  /** Horas para a folha de pagamento, fora do saldo. */
+  payroll50Minutes: number;
+  payroll100Minutes: number;
   balanceMinutes: number;
 }
 

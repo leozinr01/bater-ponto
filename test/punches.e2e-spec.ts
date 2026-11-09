@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { authHeader, createTestApp, createUser, TestContext } from './helpers';
 
 /** Instante a partir de horário local de Brasília (UTC-3). */
@@ -24,6 +25,53 @@ describe('Ponto (e2e)', () => {
     });
 
   describe('registro', () => {
+    it('aceita batida offline com o horário do aparelho, sem duplicar no reenvio', async () => {
+      const employee = await createUser(ctx);
+      const headers = authHeader(ctx, employee);
+      const at = new Date(Date.now() - 3 * 3_600_000);
+      at.setSeconds(0, 0);
+      const offline = { clientId: randomUUID(), at: at.toISOString() };
+
+      const first = await ctx
+        .http()
+        .post('/api/punches')
+        .set(headers)
+        .send({ offline });
+      expect(first.status).toBe(201);
+      expect(first.body).toMatchObject({
+        offline: true,
+        interpretedAs: 'entrada',
+        timestamp: at.toISOString(),
+      });
+
+      // Reenvio (a resposta se perdeu): devolve a mesma marcação
+      const again = await ctx
+        .http()
+        .post('/api/punches')
+        .set(headers)
+        .send({ offline });
+      expect(again.status).toBe(201);
+      expect(again.body.id).toBe(first.body.id);
+      expect(
+        await ctx.prisma.punchClock.count({ where: { userId: employee.id } }),
+      ).toBe(1);
+
+      // Velha demais ou no futuro: recusada
+      for (const hours of [80, -1]) {
+        const res = await ctx
+          .http()
+          .post('/api/punches')
+          .set(headers)
+          .send({
+            offline: {
+              clientId: randomUUID(),
+              at: new Date(Date.now() - hours * 3_600_000).toISOString(),
+            },
+          });
+        expect(res.status).toBe(400);
+      }
+    });
+
     it('registra com o horário do servidor e recusa clique duplicado', async () => {
       const employee = await createUser(ctx);
       const headers = authHeader(ctx, employee);
@@ -373,6 +421,8 @@ describe('Ponto (e2e)', () => {
         expectedMinutes: 2400,
         lateMinutes: 30,
         overtimeMinutes: 60,
+        overtime50Minutes: 60,
+        overtime100Minutes: 0,
         deficitMinutes: 60,
         compensatedMinutes: 0,
         incompleteDays: 1,

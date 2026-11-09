@@ -44,6 +44,38 @@ export const envSchema = z.object({
           ? Number(value)
           : value === 'true',
     ),
+  /**
+   * Grava o endereço aproximado de cada batida a partir da localização (OpenStreetMap).
+   * Ligado por padrão; os testes desligam para não depender da internet.
+   */
+  REVERSE_GEOCODING: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((value) => value === 'true'),
+  NOMINATIM_URL: z
+    .string()
+    .url()
+    .default('https://nominatim.openstreetmap.org'),
+  /**
+   * Lembretes push de entrada e saída. Sem as chaves VAPID, ficam desligados.
+   * Gere com: npx web-push generate-vapid-keys
+   */
+  VAPID_PUBLIC_KEY: z.string().optional(),
+  VAPID_PRIVATE_KEY: z.string().optional(),
+  /** Contato exigido pelos serviços de push: "mailto:voce@empresa.com" ou a URL do app. */
+  VAPID_SUBJECT: z.string().optional(),
+  /**
+   * Segredo que o agendador externo envia para disparar os lembretes (POST /api/push/tick).
+   * Sem ele, a rota fica desligada.
+   */
+  CRON_SECRET: z
+    .string()
+    .optional()
+    .transform((value) => value || undefined)
+    .refine(
+      (value) => !value || value.length >= 16,
+      'CRON_SECRET deve ter pelo menos 16 caracteres',
+    ),
   /** Liga o Swagger em /swagger. Desligado por padrão para não ir ao ar por esquecimento. */
   SWAGGER_ENABLED: z
     .enum(['true', 'false'])

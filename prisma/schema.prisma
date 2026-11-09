@@ -30,19 +30,52 @@ model User {
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime? @updatedAt @map("updated_at")
 
-  workSchedule            WorkSchedule?     @relation(fields: [workScheduleId], references: [id])
-  punchClocks             PunchClock[]      @relation("PunchOwner")
-  createdPunches          PunchClock[]      @relation("PunchCreatedBy")
-  voidedPunches           PunchClock[]      @relation("PunchVoidedBy")
-  absences                Absence[]         @relation("AbsenceOwner")
-  createdAbsences         Absence[]         @relation("AbsenceCreatedBy")
-  canceledAbsences        Absence[]         @relation("AbsenceCanceledBy")
+  workSchedule            WorkSchedule?      @relation(fields: [workScheduleId], references: [id])
+  punchClocks             PunchClock[]       @relation("PunchOwner")
+  createdPunches          PunchClock[]       @relation("PunchCreatedBy")
+  voidedPunches           PunchClock[]       @relation("PunchVoidedBy")
+  absences                Absence[]          @relation("AbsenceOwner")
+  createdAbsences         Absence[]          @relation("AbsenceCreatedBy")
+  canceledAbsences        Absence[]          @relation("AbsenceCanceledBy")
   scheduleHistory         ScheduleHistory[]
-  hourBankEntries         HourBankEntry[]   @relation("HourBankOwner")
-  createdHourBankEntries  HourBankEntry[]   @relation("HourBankCreatedBy")
-  canceledHourBankEntries HourBankEntry[]   @relation("HourBankCanceledBy")
+  hourBankEntries         HourBankEntry[]    @relation("HourBankOwner")
+  createdHourBankEntries  HourBankEntry[]    @relation("HourBankCreatedBy")
+  canceledHourBankEntries HourBankEntry[]    @relation("HourBankCanceledBy")
+  pushSubscriptions       PushSubscription[]
+  pushReminders           PushReminder[]
 
   @@map("users")
+}
+
+/// Aparelho (navegador) que aceitou receber os lembretes de entrada e saída.
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  /// Endereço do serviço de push do navegador: identifica o aparelho.
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}
+
+/// Lembrete já enviado: um de cada tipo por funcionário e dia.
+model PushReminder {
+  userId String   @map("user_id")
+  /// Data local (YYYY-MM-DD, no fuso APP_TIMEZONE).
+  date   String
+  /// entry = hora de bater a entrada; exit = hora de registrar a saída.
+  kind   String
+  sentAt DateTime @default(now()) @map("sent_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, date, kind])
+  @@map("push_reminders")
 }
 
 model WorkSchedule {
@@ -193,8 +226,15 @@ model PunchClock {
   /// Local mais próximo e a distância até ele, guardados como eram na hora da marcação.
   workplaceName  String?              @map("workplace_name")
   distanceMeters Int?                 @map("distance_meters")
+  /// Endereço aproximado da localização (OpenStreetMap), gravado na hora da marcação.
+  address        String?
 
-  voidedAt  DateTime? @map("voided_at") @db.Timestamptz(3)
+  /// Batida feita sem internet: o horário veio do aparelho e chegou depois (createdAt = recebimento).
+  offline  Boolean @default(false)
+  /// Identificador gerado pelo aparelho na batida offline: o reenvio não grava duas vezes.
+  clientId String? @unique @map("client_id")
+
+  voidedAt   DateTime? @map("voided_at") @db.Timestamptz(3)
   voidedById String?   @map("voided_by_id")
   voidReason String?   @map("void_reason")
 

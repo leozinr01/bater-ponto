@@ -1,4 +1,4 @@
-import { ArrowRight, CalendarX, ChartColumn, Hourglass, Timer, TriangleAlert } from 'lucide-react';
+import { ArrowRight, CalendarX, ChartColumn, FileSpreadsheet, FileText, Hourglass, Timer, TriangleAlert } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Balance } from '../../components/timesheet';
@@ -17,25 +17,42 @@ import {
 import { api, errorMessage } from '../../lib/api';
 import { currentMonth, formatDate, formatMinutes, monthRange } from '../../lib/format';
 import { useReport } from '../../lib/queries';
-import type { Paginated, ReportItem } from '../../lib/types';
-import { ExportMenu } from '../../components/ExportMenu';
+import { timesheetSection } from '../../lib/timesheet-export';
+import type { Paginated, ReportItem, Timesheet } from '../../lib/types';
+import { ExportMenu, type ExportOption } from '../../components/ExportMenu';
 import { MonthNav } from '../../components/MonthNav';
 import { exportTable, type ExportFormat } from '../../lib/export';
 
-/** Busca todas as páginas do relatório e baixa como PDF ou CSV. */
-async function exportReport(from: string, to: string, format: ExportFormat) {
+type ReportExport = ExportFormat | 'pdf-dias' | 'csv-dias';
+
+const reportExportOptions: ExportOption<ReportExport>[] = [
+  { value: 'pdf', label: 'Resumo em PDF', hint: 'Totais por funcionário', icon: FileText },
+  { value: 'csv', label: 'Resumo em CSV', hint: 'Totais por funcionário, para o Excel', icon: FileSpreadsheet },
+  { value: 'pdf-dias', label: 'Detalhado por dia em PDF', hint: 'Entrada, saída e hora extra de cada dia', icon: FileText },
+  { value: 'csv-dias', label: 'Detalhado por dia em CSV', hint: 'Um bloco por funcionário, para o Excel', icon: FileSpreadsheet },
+];
+
+/** Todos os funcionários do relatório (todas as páginas). */
+async function fetchReportItems(from: string, to: string) {
   const items: ReportItem[] = [];
   for (let page = 1; ; page++) {
     const res = await api<Paginated<ReportItem>>('/punches/report', { query: { from, to, page, pageSize: 100 } });
     items.push(...res.data);
     if (page >= res.meta.totalPages) break;
   }
-  const header = [
+  return items;
+}
+
+/** Resumo por funcionário, com uma linha de total no fim. */
+async function exportSummary(from: string, to: string, format: ExportFormat) {
+  const items = await fetchReportItems(from, to);
+  const head = [
     'Funcionário',
     'Trabalhado',
     'Previsto',
-    'Horas extras',
-    'Falta de horas',
+    'Hora extra 50%',
+    'Hora extra 100%',
+    'Horas negativas',
     'Atrasos',
     'Faltas (dias)',
     'Dias incompletos',
@@ -44,11 +61,14 @@ async function exportReport(from: string, to: string, format: ExportFormat) {
     'Marcações fora do local',
     'Banco de horas (acumulado)',
   ];
+  const total = (pick: (t: ReportItem['totals']) => number | null) =>
+    items.reduce((acc, i) => acc + (pick(i.totals) ?? 0), 0);
   const rows = items.map(({ employee, totals: t, hourBankMinutes }) => [
     employee.name,
     formatMinutes(t.workedMinutes),
     formatMinutes(t.expectedMinutes),
-    formatMinutes(t.overtimeMinutes),
+    formatMinutes(t.overtime50Minutes),
+    formatMinutes(t.overtime100Minutes),
     formatMinutes(t.deficitMinutes),
     formatMinutes(t.lateMinutes),
     t.absentDays,
@@ -62,9 +82,43 @@ async function exportReport(from: string, to: string, format: ExportFormat) {
     filename: `relatorio-ponto_${from}_${to}`,
     title: 'Relatório do período',
     subtitle: `${formatDate(from)} a ${formatDate(to)} · ${items.length} funcionário(s)`,
-    head: header,
-    rows,
+    sections: [
+      {
+        head,
+        rows,
+        summary: [
+          ['Horas trabalhadas', formatMinutes(total((t) => t.workedMinutes))],
+          ['Hora extra 50%', formatMinutes(total((t) => t.overtime50Minutes))],
+          ['Hora extra 100%', formatMinutes(total((t) => t.overtime100Minutes))],
+          ['Horas negativas', formatMinutes(total((t) => t.deficitMinutes))],
+          ['Atrasos', formatMinutes(total((t) => t.lateMinutes))],
+          ['Faltas (dias)', total((t) => t.absentDays)],
+        ],
+      },
+    ],
   });
+}
+
+/** Espelho de cada funcionário (data, entrada, intervalo, saída, hora extra) com o resumo de cada um. */
+async function exportByDay(from: string, to: string, format: ExportFormat) {
+  const items = await fetchReportItems(from, to);
+  const sections = [];
+  for (const { employee } of items) {
+    const sheet = await api<Timesheet>('/punches/timesheet', { query: { employeeId: employee.id, from, to } });
+    sections.push(timesheetSection(sheet, employee.name));
+  }
+  await exportTable(format, {
+    filename: `relatorio-ponto-por-dia_${from}_${to}`,
+    title: 'Relatório do período · detalhado por dia',
+    subtitle: `${formatDate(from)} a ${formatDate(to)} · ${items.length} funcionário(s)`,
+    sections,
+  });
+}
+
+function exportReport(from: string, to: string, choice: ReportExport) {
+  if (choice === 'pdf-dias') return exportByDay(from, to, 'pdf');
+  if (choice === 'csv-dias') return exportByDay(from, to, 'csv');
+  return exportSummary(from, to, choice);
 }
 
 const sum = (items: ReportItem[], pick: (i: ReportItem) => number | null) =>
@@ -78,11 +132,11 @@ export function ReportPage() {
   const { from, to } = monthRange(month);
   const report = useReport({ from, to, page });
 
-  const onExport = async (format: ExportFormat) => {
+  const onExport = async (choice: ReportExport) => {
     setExporting(true);
     setExportError('');
     try {
-      await exportReport(from, to, format);
+      await exportReport(from, to, choice);
     } catch (err) {
       setExportError(errorMessage(err));
     } finally {
@@ -109,7 +163,7 @@ export function ReportPage() {
                 setPage(1);
               }}
             />
-            <ExportMenu onExport={onExport} loading={exporting} />
+            <ExportMenu onExport={onExport} options={reportExportOptions} loading={exporting} />
           </>
         }
       />
@@ -175,6 +229,12 @@ export function ReportPage() {
                       <th className={cn(table.th, 'text-right')}>Trabalhado</th>
                       <th className={cn(table.th, 'text-right')}>Previsto</th>
                       <th className={cn(table.th, 'text-right')}>Saldo</th>
+                      <th
+                        className={cn(table.th, 'text-right whitespace-nowrap')}
+                        title="Horas extras com adicional de 50% (dias úteis e sábado) e de 100% (domingo e feriado)"
+                      >
+                        Extra 50% / 100%
+                      </th>
                       <th className={cn(table.th, 'text-right')} title="Saldo do banco de horas acumulado até o fim do período">
                         Banco
                       </th>
@@ -216,6 +276,15 @@ export function ReportPage() {
                         </td>
                         <td className={cn(table.td, 'text-right font-medium tabular-nums')}>
                           <Balance overtime={t.overtimeMinutes} deficit={t.deficitMinutes} />
+                        </td>
+                        <td className={cn(table.td, 'text-right whitespace-nowrap text-slate-300 tabular-nums')}>
+                          {t.overtime50Minutes || t.overtime100Minutes ? (
+                            <>
+                              {formatMinutes(t.overtime50Minutes)} / {formatMinutes(t.overtime100Minutes)}
+                            </>
+                          ) : (
+                            <span className="text-slate-600">–</span>
+                          )}
                         </td>
                         <td className={cn(table.td, 'text-right font-semibold tabular-nums')}>
                           <Link

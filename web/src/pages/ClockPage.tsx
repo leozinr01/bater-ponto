@@ -1,4 +1,4 @@
-import { Coffee, DoorOpen, Fingerprint, Hourglass, LogIn, LogOut, Timer } from 'lucide-react';
+import { Clock3, CloudOff, Coffee, DoorOpen, Fingerprint, Hourglass, LogIn, LogOut, Timer } from 'lucide-react';
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { LocationBadge } from '../components/location';
 import { DayStatusBadge } from '../components/timesheet';
@@ -9,9 +9,16 @@ import { useServerNow } from '../lib/clock';
 import { useAuth } from '../lib/auth';
 import { addDays, formatDuration, formatMinutes, timeOf, today } from '../lib/format';
 import { locateDevice, locationProblemMessage, useLocationWarmUp, type LocationProblem } from '../lib/geo';
+import { enqueuePunch, usePendingPunches } from '../lib/offline-queue';
 import { useOnline } from '../lib/online';
 import { useRegisterPunch, useTimesheet } from '../lib/queries';
 import type { RegisteredPunch } from '../lib/types';
+
+/**
+ * Tempo de espera sugerido entre duas batidas. O botão fica cinza até lá, mas ainda deixa
+ * bater com um segundo toque: a Portaria 671 proíbe impedir a marcação (ex.: saída antecipada).
+ */
+const PUNCH_COOLDOWN_MINUTES = 60;
 
 function greeting(hour: number) {
   if (hour < 12) return 'Bom dia';
@@ -188,6 +195,16 @@ export function ClockPage() {
   const [locationProblem, setLocationProblem] = useState<LocationProblem | null>(null);
   const permission = useLocationWarmUp();
   const online = useOnline();
+  // Batidas feitas sem internet que ainda não foram enviadas
+  const pending = usePendingPunches();
+  const [savedOffline, setSavedOffline] = useState<string | null>(null);
+  // Primeiro toque durante a espera só pede confirmação
+  const [confirmEarly, setConfirmEarly] = useState(false);
+  useEffect(() => {
+    if (!confirmEarly) return;
+    const id = setTimeout(() => setConfirmEarly(false), 6000);
+    return () => clearTimeout(id);
+  }, [confirmEarly]);
 
   const tz = sheet.data?.timezone;
   const todayDate = today(tz);
@@ -196,7 +213,23 @@ export function ClockPage() {
   // Uma jornada noturna aberta ontem também faz a próxima marcação ser saída
   const activeDay = sheet.data?.days.findLast((d) => d.status === 'in_progress');
   const workingSince = activeDay?.periods.find((p) => p.end === null)?.start;
-  const nextAction = activeDay ? 'saída' : 'entrada';
+  // Cada batida guardada offline inverte a próxima ação
+  const nextAction = ((activeDay ? 1 : 0) + pending.length) % 2 === 1 ? 'saída' : 'entrada';
+
+  // Espera desde a última batida (registrada, recém-feita ou guardada offline)
+  const lastPunchAt = Math.max(
+    0,
+    ...(sheet.data?.days.flatMap((d) => d.punches.map((p) => new Date(p.timestamp).getTime())) ?? []),
+    last ? new Date(last.timestamp).getTime() : 0,
+    ...pending.map((p) => new Date(p.at).getTime()),
+  );
+  const cooldownUntil = lastPunchAt ? lastPunchAt + PUNCH_COOLDOWN_MINUTES * 60_000 : 0;
+  const coolingDown = now.getTime() < cooldownUntil;
+  const cooldownTime = new Date(cooldownUntil).toLocaleTimeString('pt-BR', {
+    timeZone: tz,
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 
   // Minutos trabalhados até agora, contando o período em aberto
   const workedNow = (day?.workedMinutes ?? 0) + (openPeriod ? minutesBetween(openPeriod.start, now) : 0);
@@ -214,15 +247,40 @@ export function ClockPage() {
         })
       : null;
 
+  /** Sem internet: a batida fica no celular e o layout envia quando a conexão voltar. */
+  const saveOffline = (location: Parameters<typeof enqueuePunch>[1]) => {
+    if (!user) return;
+    const punch = enqueuePunch(user.id, location);
+    register.reset();
+    setLast(null);
+    const time = new Date(punch.at).toLocaleTimeString('pt-BR', { timeZone: tz, hour: '2-digit', minute: '2-digit' });
+    setSavedOffline(time);
+    toast(`Sem internet: ${sheet.data ? nextAction : 'batida'} das ${time} guardada no celular.`);
+  };
+
   const onPunch = async () => {
+    if (coolingDown && !confirmEarly) {
+      setConfirmEarly(true);
+      return;
+    }
+    setConfirmEarly(false);
+    setSavedOffline(null);
     setLocating(true);
     const { location, problem } = await locateDevice();
     setLocating(false);
+    if (!navigator.onLine) {
+      saveOffline(location);
+      return;
+    }
     register.mutate(location, {
       onSuccess: (punch) => {
         setLast(punch);
         setLocationProblem(problem);
         toast(`${punch.interpretedAs === 'entrada' ? 'Entrada' : 'Saída'} registrada às ${timeOf(punch.localTime)}`);
+      },
+      // A conexão caiu no meio: guarda para reenviar (se já tinha chegado, o reenvio é ignorado)
+      onError: (err) => {
+        if (err instanceof ApiError && err.kind === 'network') saveOffline(location);
       },
     });
   };
@@ -274,30 +332,59 @@ export function ClockPage() {
               <button
                 type="button"
                 onClick={onPunch}
-                disabled={busy || !online}
-                className="group mt-10 flex h-16 w-full max-w-xs animate-pulse-ring items-center justify-center gap-3 rounded-2xl bg-brand-500 text-base font-semibold text-white shadow-lg shadow-brand-500/30 transition hover:bg-brand-400 active:scale-[0.98] disabled:animate-none disabled:opacity-70"
+                disabled={busy}
+                className={cn(
+                  'group mt-10 flex h-16 w-full max-w-xs items-center justify-center gap-3 rounded-2xl text-base font-semibold transition active:scale-[0.98] disabled:opacity-70',
+                  coolingDown && !confirmEarly
+                    ? 'bg-white/[0.08] text-slate-300 ring-1 ring-white/10 hover:bg-white/[0.12]'
+                    : confirmEarly
+                      ? 'bg-amber-500 text-ink-950 shadow-lg shadow-amber-500/25 hover:bg-amber-400'
+                      : 'animate-pulse-ring bg-brand-500 text-white shadow-lg shadow-brand-500/30 hover:bg-brand-400 disabled:animate-none',
+                )}
               >
                 {busy ? (
                   <Spinner className="size-5" />
+                ) : coolingDown && !confirmEarly ? (
+                  <Clock3 className="size-6" />
+                ) : !online ? (
+                  <CloudOff className="size-6" />
                 ) : (
                   <Fingerprint className="size-6 transition-transform group-hover:scale-110" />
                 )}
-                {!online
-                  ? 'Sem conexão'
-                  : locating
-                    ? 'Obtendo localização…'
-                    : sheet.data
-                      ? `Registrar ${nextAction}`
-                      : 'Registrar ponto'}
+                {locating
+                  ? 'Obtendo localização…'
+                  : confirmEarly
+                    ? `Registrar ${nextAction} agora?`
+                    : coolingDown
+                      ? `Próxima batida às ${cooldownTime}`
+                      : !online
+                        ? `Registrar ${sheet.data ? nextAction : 'ponto'} offline`
+                        : sheet.data || pending.length
+                          ? `Registrar ${nextAction}`
+                          : 'Registrar ponto'}
               </button>
 
-              <div className="mt-5 min-h-6 text-sm">
-                {register.isError ? (
-                  <p className="text-red-300">
-                    {errorMessage(register.error)}
-                    {register.error instanceof ApiError && register.error.kind === 'network' &&
-                      ' Confira o resumo de hoje antes de tentar de novo: a marcação pode ter sido registrada.'}
+              <div className="mt-5 min-h-6 space-y-2 text-sm">
+                {(confirmEarly || (coolingDown && !busy)) && (
+                  <p className="mx-auto max-w-xs text-xs text-slate-400">
+                    {confirmEarly
+                      ? 'Toque de novo para registrar antes do intervalo de 1 hora.'
+                      : `Espere ${PUNCH_COOLDOWN_MINUTES} min entre as batidas. Se precisar registrar antes, toque duas vezes.`}
                   </p>
+                )}
+                {pending.length > 0 && (
+                  <p className="mx-auto flex max-w-xs items-center justify-center gap-1.5 text-xs text-amber-300">
+                    <CloudOff className="size-3.5 shrink-0" />
+                    {pending.length === 1 ? '1 batida guardada' : `${pending.length} batidas guardadas`} sem internet:
+                    {online ? ' enviando…' : ' serão enviadas quando a conexão voltar.'}
+                  </p>
+                )}
+                {savedOffline ? (
+                  <p className="text-amber-200">
+                    ✓ Batida das <strong className="text-white">{savedOffline}</strong> guardada no celular
+                  </p>
+                ) : register.isError ? (
+                  <p className="text-red-300">{errorMessage(register.error)}</p>
                 ) : last ? (
                   <div className="space-y-2">
                     <p className="text-emerald-300">
@@ -320,8 +407,9 @@ export function ClockPage() {
               </div>
 
               <p className="mt-4 max-w-sm text-xs text-slate-500">
-                O horário registrado é sempre o do servidor. Entrada e saída são definidas pela ordem das marcações. Sua
-                localização é enviada só no momento da marcação, nunca durante o dia.
+                O horário registrado é o do servidor. Sem internet, a batida fica guardada no celular e é enviada quando a
+                conexão voltar, marcada como offline. Entrada e saída seguem a ordem das marcações. Sua localização é
+                enviada só no momento da marcação, nunca durante o dia.
               </p>
             </div>
           </div>

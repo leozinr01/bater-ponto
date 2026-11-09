@@ -12,5 +12,6 @@ import { PunchesService } from './punches.service';
   imports: [EnvModule, HolidaysModule, AbsencesModule, WorkplacesModule],
   controllers: [PunchesController, HourBankController],
   providers: [PunchesService, HourBankService],
+  exports: [PunchesService],
 })
 export class PunchesModule {}

@@ -424,6 +424,10 @@ describe('Feriados, abonos, painel do dia e alertas (e2e)', () => {
         deficitMinutes: 60,
         compensatedMinutes: 480,
         adjustmentMinutes: 600,
+        // Tudo em dias úteis: nada de sábado nem de folha de pagamento
+        saturdayCreditMinutes: 0,
+        payroll50Minutes: 0,
+        payroll100Minutes: 0,
         balanceMinutes: 150 - 60 - 480 + 600,
       });
       expect(

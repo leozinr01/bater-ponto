@@ -4,48 +4,27 @@ import { useSearchParams } from 'react-router-dom';
 import { EmployeePicker } from '../components/EmployeePicker';
 import { ExportMenu } from '../components/ExportMenu';
 import { MonthNav } from '../components/MonthNav';
-import { alertLabels, balanceLabel, dayStatusLabel } from '../components/timesheet';
 import { useToast } from '../components/toast';
 import { cn, PageHeader } from '../components/ui';
 import { errorMessage } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { exportTable, type ExportFormat } from '../lib/export';
-import { currentMonth, formatDate, formatMinutes, monthRange, timeOf, WEEKDAYS } from '../lib/format';
+import { currentMonth, formatDate, monthRange } from '../lib/format';
 import { useTimesheet } from '../lib/queries';
+import { fileSlug, timesheetSection } from '../lib/timesheet-export';
 import type { Timesheet } from '../lib/types';
 import { DaysView } from './records/DaysView';
 import { PunchesView } from './records/PunchesView';
 
 type Tab = 'dias' | 'marcacoes';
 
-/** Espelho de ponto do mês em PDF ou CSV: uma linha por dia, como na impressão. */
+/** Espelho de ponto do mês em PDF ou CSV: uma linha por dia e o resumo no fim. */
 function exportTimesheet(format: ExportFormat, sheet: Timesheet, from: string, to: string) {
-  const slug = sheet.employee.name
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-zA-Z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .toLowerCase();
   return exportTable(format, {
-    filename: `espelho-ponto_${slug}_${from.slice(0, 7)}`,
+    filename: `espelho-ponto_${fileSlug(sheet.employee.name)}_${from.slice(0, 7)}`,
     title: `Espelho de ponto · ${sheet.employee.name}`,
     subtitle: `${formatDate(from)} a ${formatDate(to)} · fuso ${sheet.timezone}`,
-    head: ['Dia', 'Marcações', 'Trabalhado', 'Intervalo', 'Atraso', 'Saldo', 'Situação'],
-    rows: sheet.days.map((d) => [
-      `${formatDate(d.date, false)} ${WEEKDAYS[d.weekday]}`,
-      d.punches.map((p) => timeOf(p.localTime)).join('  ') || '–',
-      d.punches.length ? formatMinutes(d.workedMinutes) : '–',
-      d.breakMinutes ? formatMinutes(d.breakMinutes) : '–',
-      d.lateMinutes ? formatMinutes(d.lateMinutes) : '–',
-      balanceLabel(d.overtimeMinutes, d.deficitMinutes),
-      [
-        dayStatusLabel(d),
-        d.absence?.reason,
-        ...d.alerts.map((a) => alertLabels[a].label),
-      ]
-        .filter(Boolean)
-        .join(' · '),
-    ]),
+    sections: [timesheetSection(sheet)],
   });
 }
 

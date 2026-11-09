@@ -41,8 +41,19 @@ export function setTokens(tokens: Tokens | null) {
   }
 }
 
-/** Diferença (ms) entre o relógio do servidor e o do aparelho. */
-let serverClockOffset = 0;
+const CLOCK_KEY = 'ponto.relogio';
+
+/**
+ * Diferença (ms) entre o relógio do servidor e o do aparelho. Fica salva para a batida
+ * offline usar o horário certo mesmo quando o app abre sem internet.
+ */
+let serverClockOffset = (() => {
+  try {
+    return Number(localStorage.getItem(CLOCK_KEY)) || 0;
+  } catch {
+    return 0;
+  }
+})();
 
 /** Respostas mais lentas que isso não servem para acertar o relógio. */
 const MAX_CLOCK_SAMPLE_RTT_MS = 1000;
@@ -60,6 +71,11 @@ function trackServerClock(res: Response, sentAt: number) {
   if (isNaN(server)) return;
   const offset = server + 500 - (sentAt + receivedAt) / 2;
   serverClockOffset = Math.abs(offset) >= 2000 ? offset : 0;
+  try {
+    localStorage.setItem(CLOCK_KEY, String(Math.round(serverClockOffset)));
+  } catch {
+    // sem armazenamento: vale só nesta aba
+  }
 }
 
 /** Agora pelo relógio do servidor: o mesmo horário que vai para as marcações. */

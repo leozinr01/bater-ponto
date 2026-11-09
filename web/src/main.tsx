@@ -10,10 +10,15 @@ import './index.css';
 
 const queryClient = createQueryClient();
 
-// O app deixou de ser PWA: remove o service worker de quem instalou a versão antiga
-navigator.serviceWorker?.getRegistrations().then((registrations) => {
-  for (const registration of registrations) registration.unregister();
-});
+// Service worker: deixa o app abrir sem internet (para a batida offline) e recebe os lembretes push.
+// Só no build de produção: no desenvolvimento o cache atrapalharia o recarregamento.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      // sem service worker o app funciona normalmente, só não abre offline
+    });
+  });
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

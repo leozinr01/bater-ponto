@@ -15,6 +15,8 @@ import {
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
+import { useOfflineSync } from '../lib/offline-queue';
+import { useToast } from './toast';
 import { Avatar, cn } from './ui';
 
 export const APP_NAME = 'Sistema de Ponto';
@@ -180,6 +182,13 @@ export function Layout() {
   const [open, setOpen] = useState(false);
   const location = useLocation();
   const inAdmin = location.pathname.startsWith('/admin');
+
+  const toast = useToast();
+  // Batidas feitas sem internet são enviadas daqui, em qualquer tela
+  useOfflineSync((punch, message) => {
+    const time = new Date(punch.at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    toast(`A batida offline das ${time} não foi aceita: ${message}`, 'error');
+  });
 
   // Fecha o menu do celular ao navegar
   useEffect(() => setOpen(false), [location.pathname]);

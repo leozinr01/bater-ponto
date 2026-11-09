@@ -82,13 +82,32 @@ export class HourBankEntryResponseDto {
 }
 
 class HourBankMovementDto {
-  @ApiProperty({ description: 'Horas extras' }) overtimeMinutes: number;
+  @ApiProperty({ description: 'Horas extras de dias úteis (1:1 no banco)' })
+  overtimeMinutes: number;
   @ApiProperty({ description: 'Falta de horas' }) deficitMinutes: number;
   @ApiProperty({ description: 'Consumido por folgas de banco' })
   compensatedMinutes: number;
   @ApiProperty({ description: 'Ajustes manuais (créditos − débitos)' })
   adjustmentMinutes: number;
-  @ApiProperty({ description: 'Resultado: extras − falta − folgas + ajustes' })
+  @ApiProperty({
+    description:
+      'Crédito vindo de extras de sábado para pagar horas negativas (já ×1,5)',
+  })
+  saturdayCreditMinutes: number;
+  @ApiProperty({
+    description:
+      'Horas de sábado que sobraram após pagar o negativo: vão para a folha (50%), fora do saldo',
+  })
+  payroll50Minutes: number;
+  @ApiProperty({
+    description:
+      'Horas de domingo e feriado: vão para a folha (100%), fora do saldo',
+  })
+  payroll100Minutes: number;
+  @ApiProperty({
+    description:
+      'Resultado: extras − falta − folgas + ajustes + crédito de sábado',
+  })
   balanceMinutes: number;
 }
 

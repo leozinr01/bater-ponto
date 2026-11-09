@@ -1,11 +1,11 @@
-import { MapPin } from 'lucide-react';
+import { CloudOff, MapPin } from 'lucide-react';
 import { formatDistance, mapsUrl } from '../lib/geo';
 import type { PunchLocation, TimesheetDay } from '../lib/types';
 import { Badge } from './ui';
 
 /** Selo da localização de uma marcação, com link para o mapa quando há coordenadas. */
 export function LocationBadge({ location }: { location: PunchLocation }) {
-  const { status, workplaceName, distanceMeters, latitude, longitude, accuracyMeters } = location;
+  const { status, workplaceName, distanceMeters, latitude, longitude, accuracyMeters, address } = location;
   const badge =
     status === 'INSIDE' ? (
       <Badge tone="green" dot>
@@ -41,20 +41,37 @@ export function LocationBadge({ location }: { location: PunchLocation }) {
         title={accuracyMeters !== null ? `Ver no mapa (margem de erro de ${formatDistance(accuracyMeters)})` : 'Ver no mapa'}
         className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-brand-300 hover:bg-brand-500/10 hover:text-brand-200"
       >
-        <MapPin className="size-3" />
-        Mapa
+        <MapPin className="size-3 shrink-0" />
+        {address ? <span className="max-w-72 truncate">{address}</span> : 'Mapa'}
       </a>
     </span>
   );
 }
 
-/** Selo "fora do local" de um dia, quando alguma marcação foi feita fora dos locais de trabalho. */
+/** Selo de batida feita sem internet: o horário veio do celular, vale conferir. */
+export function OfflineBadge() {
+  return (
+    <span title="Batida feita sem internet e enviada depois. O horário é o do celular.">
+      <Badge tone="amber">
+        <CloudOff className="size-3" />
+        Offline
+      </Badge>
+    </span>
+  );
+}
+
+/** Selos de um dia: marcações fora dos locais de trabalho e batidas feitas sem internet. */
 export function DayLocationAlert({ day }: { day: TimesheetDay }) {
   const outside = day.punches.filter((p) => p.locationStatus === 'OUTSIDE').length;
-  if (!outside) return null;
+  const offline = day.punches.some((p) => p.offline);
   return (
-    <span title="Marcação feita fora dos locais de trabalho. Veja o mapa na aba Marcações.">
-      <Badge tone="red">{outside > 1 ? `${outside} fora do local` : 'Fora do local'}</Badge>
-    </span>
+    <>
+      {outside > 0 && (
+        <span title="Marcação feita fora dos locais de trabalho. Veja o mapa na aba Marcações.">
+          <Badge tone="red">{outside > 1 ? `${outside} fora do local` : 'Fora do local'}</Badge>
+        </span>
+      )}
+      {offline && <OfflineBadge />}
+    </>
   );
 }

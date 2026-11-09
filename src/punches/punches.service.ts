@@ -14,6 +14,7 @@ import { PrismaService } from '@/infra/database/prisma.service';
 import { EnvService } from '@/infra/env/env.service';
 import { loadScheduleHistory } from '@/work-schedules/schedule-history';
 import { evaluateLocation, parseDeviceLocation } from '@/workplaces/geo';
+import { ReverseGeocoder } from '@/workplaces/reverse-geocode';
 import { WorkplacesService } from '@/workplaces/workplaces.service';
 import {
   BadRequestException,
@@ -43,6 +44,41 @@ import {
 /** Duas marcações do mesmo funcionário em menos tempo que isso são tratadas como clique duplicado. */
 const DUPLICATE_WINDOW_MS = 60_000;
 const MAX_PERIOD_DAYS = 93;
+/** Batida offline aceita até este tempo depois de feita. */
+export const OFFLINE_MAX_HOURS = 72;
+/** Folga para relógio do celular um pouco adiantado. */
+const CLOCK_SKEW_MS = 2 * 60_000;
+
+/** Entrada ou saída: a posição da marcação dentro da jornada (ímpar = entrada). */
+function interpretPunch(
+  punches: PunchInput[],
+  id: string,
+): 'entrada' | 'saída' {
+  const shift = groupIntoShifts(punches).find((s) =>
+    s.some((p) => p.id === id),
+  );
+  const position = shift?.findIndex((p) => p.id === id) ?? 0;
+  return position % 2 === 0 ? 'entrada' : 'saída';
+}
+
+/** Lê `offline: { clientId, at }` do corpo; ausente = batida normal, malformado = 400. */
+function parseOfflinePunch(
+  body: unknown,
+): { clientId: string; at: string } | null {
+  const offline = (body as { offline?: unknown } | null)?.offline;
+  if (!offline || typeof offline !== 'object') return null;
+  const { clientId, at } = offline as Record<string, unknown>;
+  if (
+    typeof clientId !== 'string' ||
+    !/^[0-9a-f-]{36}$/i.test(clientId) ||
+    typeof at !== 'string'
+  ) {
+    throw new BadRequestException(
+      'Batida offline sem identificador ou horário',
+    );
+  }
+  return { clientId: clientId.toLowerCase(), at };
+}
 
 type Tx = Prisma.TransactionClient;
 export type EmployeeWithSchedule = Prisma.UserGetPayload<{
@@ -76,6 +112,7 @@ export class PunchesService {
     private holidays: HolidaysService,
     private absences: AbsencesService,
     private workplaces: WorkplacesService,
+    private geocoder: ReverseGeocoder,
     env: EnvService,
   ) {
     this.tz = env.get('APP_TIMEZONE');
@@ -83,41 +120,82 @@ export class PunchesService {
 
   /**
    * Marcação feita pelo próprio funcionário, com o horário do servidor. A localização
-   * enviada pelo app só é avaliada (no local, fora do local, sem localização): nunca impede a marcação.
+   * enviada pelo app só é avaliada (no local, fora do local, sem localização) e vira um
+   * endereço aproximado: nunca impede a marcação.
+   *
+   * Batida offline (`offline: { clientId, at }`): feita sem internet e enviada depois. Vale o
+   * horário do aparelho, conferido aqui (não no futuro, no máximo OFFLINE_MAX_HOURS atrás), e a
+   * marcação fica identificada como offline para o administrador. O mesmo clientId reenviado
+   * devolve a marcação já gravada, sem duplicar.
    */
   async register(user: AuthUser, body?: unknown) {
+    const offline = parseOfflinePunch(body);
+    if (offline) {
+      const existing = await this.prisma.punchClock.findUnique({
+        where: { clientId: offline.clientId },
+      });
+      if (existing) {
+        if (existing.userId !== user.id) {
+          throw new ConflictException('Identificador de batida já usado');
+        }
+        const around = await this.prisma.punchClock.findMany({
+          where: {
+            userId: user.id,
+            voidedAt: null,
+            timestamp: {
+              gte: new Date(
+                existing.timestamp.getTime() -
+                  MAX_WORK_PERIOD_MINUTES * 2 * 60_000,
+              ),
+              lte: existing.timestamp,
+            },
+          },
+        });
+        return {
+          ...this.toResponse(existing),
+          interpretedAs: interpretPunch(around, existing.id),
+        };
+      }
+    }
+
     const location = parseDeviceLocation(body);
-    const evaluation = evaluateLocation(location, await this.workplaces.list());
+    const [workplaces, address] = await Promise.all([
+      this.workplaces.list(),
+      location ? this.geocoder.lookup(location) : null,
+    ]);
+    const evaluation = evaluateLocation(location, workplaces);
 
     return this.prisma.$transaction(async (tx) => {
       await this.lockEmployee(tx, user.id);
       const now = new Date();
+      const at = offline ? this.parseOfflineTime(offline.at, now) : now;
 
-      const recent = await tx.punchClock.findMany({
+      const nearby = await tx.punchClock.findMany({
         where: {
           userId: user.id,
           voidedAt: null,
           timestamp: {
-            gte: new Date(now.getTime() - MAX_WORK_PERIOD_MINUTES * 2 * 60_000),
+            gte: new Date(at.getTime() - MAX_WORK_PERIOD_MINUTES * 2 * 60_000),
+            lte: now,
           },
         },
         orderBy: { timestamp: 'asc' },
       });
 
-      const last = recent.at(-1);
-      if (
-        last &&
-        now.getTime() - last.timestamp.getTime() < DUPLICATE_WINDOW_MS
-      ) {
+      const duplicate = nearby.find(
+        (p) =>
+          Math.abs(at.getTime() - p.timestamp.getTime()) < DUPLICATE_WINDOW_MS,
+      );
+      if (duplicate) {
         throw new ConflictException(
-          `Marcação já registrada às ${localDateTime(last.timestamp, this.tz)}. Aguarde 1 minuto para marcar novamente.`,
+          `Marcação já registrada às ${localDateTime(duplicate.timestamp, this.tz)}. Aguarde 1 minuto para marcar novamente.`,
         );
       }
 
       const punch = await tx.punchClock.create({
         data: {
           userId: user.id,
-          timestamp: now,
+          timestamp: at,
           source: 'EMPLOYEE',
           latitude: location?.latitude,
           longitude: location?.longitude,
@@ -125,15 +203,37 @@ export class PunchesService {
           locationStatus: evaluation.status,
           workplaceName: evaluation.workplaceName,
           distanceMeters: evaluation.distanceMeters,
+          address,
+          offline: !!offline,
+          clientId: offline?.clientId,
         },
       });
 
-      const currentShift = groupIntoShifts([...recent, punch]).at(-1)!;
       return {
         ...this.toResponse(punch),
-        interpretedAs: currentShift.length % 2 === 1 ? 'entrada' : 'saída',
+        interpretedAs: interpretPunch([...nearby, punch], punch.id),
       };
     });
+  }
+
+  /** Horário da batida offline: válido, não no futuro e não velho demais. */
+  private parseOfflineTime(value: string, now: Date) {
+    const at = new Date(value);
+    if (Number.isNaN(at.getTime())) {
+      throw new BadRequestException('Horário da batida offline inválido');
+    }
+    if (at.getTime() > now.getTime() + CLOCK_SKEW_MS) {
+      throw new BadRequestException(
+        'O horário da batida offline está no futuro: confira o relógio do celular',
+      );
+    }
+    if (now.getTime() - at.getTime() > OFFLINE_MAX_HOURS * 3_600_000) {
+      throw new BadRequestException(
+        `Batida offline com mais de ${OFFLINE_MAX_HOURS}h: peça ao administrador para incluir a marcação`,
+      );
+    }
+    // Precisão de segundos, como as demais marcações
+    return new Date(Math.floor(at.getTime() / 1000) * 1000);
   }
 
   async list(actor: AuthUser, query: ListPunchesQueryDto) {
@@ -319,7 +419,8 @@ export class PunchesService {
       const last = day?.punches.at(-1);
       const open = day?.periods.find((p) => p.end === null);
       const withLocation = (...statuses: string[]) =>
-        day?.punches.filter((p) => statuses.includes(p.locationStatus ?? '')) ?? [];
+        day?.punches.filter((p) => statuses.includes(p.locationStatus ?? '')) ??
+        [];
       const outside = withLocation('OUTSIDE');
 
       return {
@@ -523,6 +624,7 @@ export class PunchesService {
           timestamp: p.timestamp,
           localTime: localDateTime(p.timestamp, this.tz),
           locationStatus: p.locationStatus ?? null,
+          offline: p.offline ?? false,
         })),
         periods: day.periods.map((period) => ({
           start: localDateTime(period.start, this.tz),
@@ -553,7 +655,13 @@ export class PunchesService {
           lt: zonedInstant(addDays(to, 2), '00:00', this.tz),
         },
       },
-      select: { id: true, userId: true, timestamp: true, locationStatus: true },
+      select: {
+        id: true,
+        userId: true,
+        timestamp: true,
+        locationStatus: true,
+        offline: true,
+      },
       orderBy: { timestamp: 'asc' },
     });
     const byEmployee = new Map<string, PunchInput[]>();
@@ -633,6 +741,7 @@ export class PunchesService {
       voidedById: punch.voidedById,
       voidReason: punch.voidReason,
       createdAt: punch.createdAt,
+      offline: punch.offline,
       location:
         punch.locationStatus === null && punch.latitude === null
           ? null
@@ -643,6 +752,7 @@ export class PunchesService {
               accuracyMeters: punch.accuracyMeters,
               workplaceName: punch.workplaceName,
               distanceMeters: punch.distanceMeters,
+              address: punch.address,
             },
     };
   }

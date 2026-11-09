@@ -1,6 +1,7 @@
 import { Ban, PiggyBank, Plus, SlidersHorizontal } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { BankTrendChart } from '../components/BankTrendChart';
 import { EmployeePicker } from '../components/EmployeePicker';
 import { useToast } from '../components/toast';
 import {
@@ -189,7 +190,7 @@ export function HourBankPage() {
       <PageHeader
         icon={PiggyBank}
         title="Banco de horas"
-        description="Saldo acumulado: horas extras − falta de horas − folgas de banco ± ajustes."
+        description="Saldo acumulado: extras de dias úteis − falta de horas − folgas ± ajustes, com o sábado pagando horas negativas."
         actions={
           <>
             {isAdmin && (
@@ -237,10 +238,11 @@ export function HourBankPage() {
                 </Badge>
               )}
             </div>
-            <div className="grid grid-cols-2 divide-white/[0.06] border-t border-white/[0.06] sm:grid-cols-4 sm:divide-x">
+            <div className="grid grid-cols-2 divide-white/[0.06] border-t border-white/[0.06] sm:grid-cols-5 sm:divide-x">
               {(
                 [
-                  ['Horas extras', data.totals.overtimeMinutes],
+                  ['Extras (dias úteis)', data.totals.overtimeMinutes],
+                  ['Sábado (×1,5)', data.totals.saturdayCreditMinutes],
                   ['Falta de horas', -data.totals.deficitMinutes],
                   ['Folgas de banco', -data.totals.compensatedMinutes],
                   ['Ajustes', data.totals.adjustmentMinutes],
@@ -252,7 +254,25 @@ export function HourBankPage() {
                 </div>
               ))}
             </div>
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-1 border-t border-white/[0.06] px-5 py-3 text-xs text-slate-400">
+              <span className="font-medium text-slate-300">Para a folha de pagamento:</span>
+              <span>
+                Extra 50% (sábado){' '}
+                <span className="font-semibold text-white tabular-nums">{formatMinutes(data.totals.payroll50Minutes)}</span>
+              </span>
+              <span>
+                Extra 100% (domingo e feriado){' '}
+                <span className="font-semibold text-white tabular-nums">{formatMinutes(data.totals.payroll100Minutes)}</span>
+              </span>
+            </div>
           </Card>
+
+          {data.months.length >= 2 && (
+            <Card className="p-5">
+              <h2 className="mb-3 text-sm font-semibold text-white">Tendência do saldo</h2>
+              <BankTrendChart months={data.months} />
+            </Card>
+          )}
 
           <Card className="overflow-hidden">
             <div className="border-b border-white/[0.06] px-5 py-3">
@@ -267,11 +287,15 @@ export function HourBankPage() {
                     <tr>
                       <th className={table.th}>Mês</th>
                       <th className={cn(table.th, 'text-right')}>Extras</th>
+                      <th className={cn(table.th, 'text-right')}>Sábado</th>
                       <th className={cn(table.th, 'text-right')}>Falta</th>
                       <th className={cn(table.th, 'text-right')}>Folgas</th>
                       <th className={cn(table.th, 'text-right')}>Ajustes</th>
                       <th className={cn(table.th, 'text-right')}>No mês</th>
                       <th className={cn(table.th, 'text-right')}>Acumulado</th>
+                      <th className={cn(table.th, 'text-right')} title="Horas para a folha de pagamento, fora do saldo">
+                        Folha 50% / 100%
+                      </th>
                     </tr>
                   </thead>
                   <tbody className={table.tbody}>
@@ -287,6 +311,9 @@ export function HourBankPage() {
                           <Signed minutes={m.overtimeMinutes} />
                         </td>
                         <td className={cn(table.td, 'text-right')}>
+                          <Signed minutes={m.saturdayCreditMinutes} />
+                        </td>
+                        <td className={cn(table.td, 'text-right')}>
                           <Signed minutes={-m.deficitMinutes} />
                         </td>
                         <td className={cn(table.td, 'text-right')}>
@@ -300,6 +327,9 @@ export function HourBankPage() {
                         </td>
                         <td className={cn(table.td, 'text-right font-bold')}>
                           <Signed minutes={m.accumulatedMinutes} />
+                        </td>
+                        <td className={cn(table.td, 'text-right whitespace-nowrap text-slate-300 tabular-nums')}>
+                          {formatMinutes(m.payroll50Minutes)} / {formatMinutes(m.payroll100Minutes)}
                         </td>
                       </tr>
                     ))}
@@ -340,7 +370,9 @@ export function HourBankPage() {
           )}
 
           <p className="text-xs text-slate-500">
-            Dias incompletos só entram no saldo depois de corrigidos. Faltas não descontam do banco: aparecem nos registros.
+            Extras de sábado pagam primeiro as horas negativas (cada hora vale 1h30 no banco); o que sobra vai para a
+            folha com 50%. Extras de domingo e feriado vão para a folha com 100%. Dias incompletos só entram no saldo
+            depois de corrigidos. Faltas não descontam do banco: aparecem nos registros.
             Para compensar horas com uma folga, lance uma "Folga de banco" nos Registros.
           </p>
         </div>

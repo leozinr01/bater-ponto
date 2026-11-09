@@ -285,6 +285,8 @@ describe('buildTimesheet', () => {
       expectedMinutes: 960,
       lateMinutes: 30,
       overtimeMinutes: 60,
+      overtime50Minutes: 60,
+      overtime100Minutes: 0,
       deficitMinutes: 60,
       incompleteDays: 0,
       absentDays: 0,
@@ -293,6 +295,31 @@ describe('buildTimesheet', () => {
       alertDays: 2, // os dois dias passam de 6h sem intervalo
     });
   });
+});
+
+it('separa o adicional: 100% em domingo e feriado, 50% nos demais dias', () => {
+  const { days, totals } = build(
+    [
+      p('2026-10-24T08:00'), // sábado
+      p('2026-10-24T12:00'),
+      p('2026-10-25T08:00'), // domingo
+      p('2026-10-25T10:00'),
+      p('2026-10-28T08:00'), // quarta, feriado
+      p('2026-10-28T09:00'),
+    ],
+    {
+      from: '2026-10-24',
+      to: '2026-10-28',
+      holidays: new Map([['2026-10-28', 'Feriado municipal']]),
+    },
+  );
+  const rate = (date: string) =>
+    days.find((d) => d.date === date)?.overtimeRate;
+  expect(rate('2026-10-24')).toBe(50);
+  expect(rate('2026-10-25')).toBe(100);
+  expect(rate('2026-10-28')).toBe(100);
+  expect(totals.overtime50Minutes).toBe(240);
+  expect(totals.overtime100Minutes).toBe(180);
 });
 
 it('considera as marcações com precisão de minuto (ignora segundos)', () => {

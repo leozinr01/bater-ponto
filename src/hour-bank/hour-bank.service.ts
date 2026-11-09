@@ -16,26 +16,13 @@ import {
 } from '@nestjs/common';
 import { HourBankEntry } from '@prisma/client';
 import { CreateHourBankEntryDto, HourBankQueryDto } from './hour-bank.dto';
-
-export interface Movement {
-  overtimeMinutes: number;
-  deficitMinutes: number;
-  compensatedMinutes: number;
-  adjustmentMinutes: number;
-  balanceMinutes: number;
-}
-
-const emptyMovement = (): Movement => ({
-  overtimeMinutes: 0,
-  deficitMinutes: 0,
-  compensatedMinutes: 0,
-  adjustmentMinutes: 0,
-  balanceMinutes: 0,
-});
+import { emptyMovement, Movement, runLedger } from './ledger';
 
 /**
  * Banco de horas: saldo acumulado desde o cadastro do funcionário.
- * Saldo = horas extras − falta de horas − folgas de banco + ajustes manuais.
+ * Saldo = extras de dias úteis − falta de horas − folgas de banco + ajustes manuais
+ * + sábado usado para pagar horas negativas (×1,5). O resto do sábado (50%) e as extras
+ * de domingo e feriado (100%) vão para a folha de pagamento. Regras em ./ledger.
  * Dias incompletos ficam de fora até serem corrigidos (como no espelho).
  */
 @Injectable()
@@ -78,33 +65,23 @@ export class HourBankService {
     const active = entries.filter((e) => !e.canceledAt);
 
     // Extrato mês a mês, em ordem cronológica, com o acumulado
-    const byMonth = new Map<string, Movement & { pendingDays: number }>();
-    const monthOf = (month: string) => {
-      let m = byMonth.get(month);
-      if (!m) byMonth.set(month, (m = { ...emptyMovement(), pendingDays: 0 }));
-      return m;
-    };
+    const { byMonth } = runLedger(days, active);
+    const pendingByMonth = new Map<string, number>();
     for (const day of days) {
-      const m = monthOf(day.date.slice(0, 7));
-      m.overtimeMinutes += day.overtimeMinutes ?? 0;
-      m.deficitMinutes += day.deficitMinutes ?? 0;
-      m.compensatedMinutes += day.compensatedMinutes;
-      if (day.status === 'incomplete') m.pendingDays++;
-    }
-    for (const entry of active) {
-      monthOf(entry.date.slice(0, 7)).adjustmentMinutes += entry.minutes;
+      if (day.status !== 'incomplete') continue;
+      const month = day.date.slice(0, 7);
+      pendingByMonth.set(month, (pendingByMonth.get(month) ?? 0) + 1);
     }
 
     let accumulated = 0;
     const months = [...byMonth.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([month, m]) => {
-        const balanceMinutes = balanceOf(m);
-        accumulated += balanceMinutes;
+        accumulated += m.balanceMinutes;
         return {
           month,
           ...m,
-          balanceMinutes,
+          pendingDays: pendingByMonth.get(month) ?? 0,
           accumulatedMinutes: accumulated,
         };
       });
@@ -114,6 +91,9 @@ export class HourBankService {
       t.deficitMinutes += m.deficitMinutes;
       t.compensatedMinutes += m.compensatedMinutes;
       t.adjustmentMinutes += m.adjustmentMinutes;
+      t.saturdayCreditMinutes += m.saturdayCreditMinutes;
+      t.payroll50Minutes += m.payroll50Minutes;
+      t.payroll100Minutes += m.payroll100Minutes;
       t.balanceMinutes += m.balanceMinutes;
       return t;
     }, emptyMovement());
@@ -141,25 +121,17 @@ export class HourBankService {
       since <= until
         ? this.punches.computeDays(employees, since, until)
         : new Map<string, TimesheetDay[]>(),
-      this.prisma.hourBankEntry.groupBy({
-        by: ['userId'],
+      this.prisma.hourBankEntry.findMany({
         where: { userId: { in: ids }, date: { lte: until }, canceledAt: null },
-        _sum: { minutes: true },
+        select: { userId: true, date: true, minutes: true },
       }),
     ]);
     for (const id of ids) {
-      const days = daysByEmployee.get(id) ?? [];
-      result.set(
-        id,
-        days.reduce(
-          (sum, d) =>
-            sum +
-            (d.overtimeMinutes ?? 0) -
-            (d.deficitMinutes ?? 0) -
-            d.compensatedMinutes,
-          0,
-        ) + (entries.find((e) => e.userId === id)?._sum.minutes ?? 0),
+      const { balance } = runLedger(
+        daysByEmployee.get(id) ?? [],
+        entries.filter((e) => e.userId === id),
       );
+      result.set(id, balance);
     }
     return result;
   }
@@ -240,13 +212,4 @@ export class HourBankService {
       canceledAt: entry.canceledAt,
     };
   }
-}
-
-function balanceOf(m: Movement) {
-  return (
-    m.overtimeMinutes -
-    m.deficitMinutes -
-    m.compensatedMinutes +
-    m.adjustmentMinutes
-  );
 }

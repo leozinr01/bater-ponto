@@ -35,6 +35,8 @@ export interface PunchInput {
   timestamp: Date;
   /** Só repassado para a tela: não entra no cálculo. */
   locationStatus?: 'INSIDE' | 'OUTSIDE' | 'IMPRECISE' | 'UNAVAILABLE' | null;
+  /** Batida feita sem internet (horário do aparelho). */
+  offline?: boolean;
 }
 
 export interface ScheduleInput {
@@ -56,6 +58,16 @@ export interface WorkPeriod {
   /** null quando a saída não foi marcada. */
   end: Date | null;
   minutes: number;
+}
+
+export type OvertimeRate = 50 | 100;
+
+/** Domingo e feriado: 100%. Sábado e dias úteis: 50% (mínimo da CF art. 7º, XVI). */
+export function overtimeRateOf(
+  date: string,
+  holiday: string | null,
+): OvertimeRate {
+  return holiday || weekday(date) === 0 ? 100 : 50;
 }
 
 export type DayStatus = 'complete' | 'incomplete' | 'in_progress' | 'absent';
@@ -96,6 +108,8 @@ export interface TimesheetDay {
   expectedMinutes: number | null;
   lateMinutes: number | null;
   overtimeMinutes: number | null;
+  /** Adicional da hora extra do dia: 100% em domingos e feriados, 50% nos demais. */
+  overtimeRate: OvertimeRate;
   deficitMinutes: number | null;
   /** Carga do dia consumida do banco de horas por folga de banco. */
   compensatedMinutes: number;
@@ -107,6 +121,9 @@ export interface TimesheetTotals {
   expectedMinutes: number | null;
   lateMinutes: number | null;
   overtimeMinutes: number | null;
+  /** Horas extras separadas pelo adicional (somam overtimeMinutes). */
+  overtime50Minutes: number | null;
+  overtime100Minutes: number | null;
   deficitMinutes: number | null;
   compensatedMinutes: number;
   incompleteDays: number;
@@ -315,6 +332,7 @@ function buildDay(
     expectedMinutes,
     lateMinutes,
     overtimeMinutes,
+    overtimeRate: overtimeRateOf(date, holiday),
     deficitMinutes,
     compensatedMinutes: compensatedMinutes(schedule, date, holiday, absence),
     alerts:
@@ -391,6 +409,7 @@ export function buildTimesheet(input: BuildTimesheetInput): {
         expectedMinutes: 0,
         lateMinutes: null,
         overtimeMinutes: null,
+        overtimeRate: overtimeRateOf(date, holiday),
         deficitMinutes: null,
         compensatedMinutes: compensatedMinutes(
           schedule,
@@ -415,6 +434,7 @@ export function buildTimesheet(input: BuildTimesheetInput): {
         expectedMinutes: schedule!.dailyMinutes,
         lateMinutes: null,
         overtimeMinutes: null,
+        overtimeRate: overtimeRateOf(date, holiday),
         deficitMinutes: null,
         compensatedMinutes: 0,
         alerts: [],
@@ -429,6 +449,24 @@ export function buildTimesheet(input: BuildTimesheetInput): {
       expectedMinutes: sumOrNull(days.map((d) => d.expectedMinutes)),
       lateMinutes: sumOrNull(days.map((d) => d.lateMinutes)),
       overtimeMinutes: sumOrNull(days.map((d) => d.overtimeMinutes)),
+      overtime50Minutes: sumOrNull(
+        days.map((d) =>
+          d.overtimeMinutes === null
+            ? null
+            : d.overtimeRate === 50
+              ? d.overtimeMinutes
+              : 0,
+        ),
+      ),
+      overtime100Minutes: sumOrNull(
+        days.map((d) =>
+          d.overtimeMinutes === null
+            ? null
+            : d.overtimeRate === 100
+              ? d.overtimeMinutes
+              : 0,
+        ),
+      ),
       deficitMinutes: sumOrNull(days.map((d) => d.deficitMinutes)),
       compensatedMinutes: days.reduce(
         (sum, d) => sum + d.compensatedMinutes,
