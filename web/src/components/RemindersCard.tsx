@@ -120,7 +120,9 @@ export function RemindersCard() {
           </div>
         )}
 
-        {/* E-mail: funciona em qualquer aparelho, inclusive iPhone, sem instalar nada */}
+        {/* E-mail: funciona em qualquer aparelho, inclusive iPhone, sem instalar nada.
+            Só aparece quando o SMTP está configurado no servidor. */}
+        {data?.emailEnabled && (
         <div className="flex flex-wrap items-center justify-between gap-3 p-5">
           <div className="flex min-w-0 items-start gap-3">
             <Mail className="mt-0.5 size-4 shrink-0 text-slate-400" />
@@ -148,6 +150,7 @@ export function RemindersCard() {
             </Button>
           )}
         </div>
+        )}
 
         {/* Notificação no navegador deste aparelho */}
         <div className="flex flex-wrap items-center justify-between gap-3 p-5">
@@ -158,8 +161,8 @@ export function RemindersCard() {
               <p className="text-xs text-slate-500">
                 {!supported
                   ? isIos
-                    ? 'No iPhone, o navegador só mostra notificações com o app na tela de início. Use o e-mail.'
-                    : 'Este navegador não aceita notificações. Use o e-mail.'
+                    ? 'No iPhone, o navegador só mostra notificações com o app na tela de início. Com o site aberto, o aviso aparece no topo da tela.'
+                    : 'Este navegador não aceita notificações. Com o site aberto, o aviso aparece no topo da tela.'
                   : data && !data.enabled
                     ? 'As notificações ainda não foram configuradas no servidor.'
                     : !import.meta.env.PROD
