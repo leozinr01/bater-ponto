@@ -25,6 +25,8 @@ model User {
   active         Boolean  @default(true)
   /// Incrementado na troca de senha: tokens com versão diferente são rejeitados.
   tokenVersion   Int      @default(0) @map("token_version")
+  /// Recebe os lembretes de entrada e saída por e-mail (quando o SMTP está configurado).
+  emailReminders Boolean  @default(true) @map("email_reminders")
   workScheduleId String?  @map("work_schedule_id")
 
   createdAt DateTime  @default(now()) @map("created_at")

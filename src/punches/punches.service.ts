@@ -41,8 +41,14 @@ import {
   TimesheetDay,
 } from './timesheet';
 
-/** Duas marcações do mesmo funcionário em menos tempo que isso são tratadas como clique duplicado. */
-const DUPLICATE_WINDOW_MS = 60_000;
+/**
+ * Intervalo mínimo entre duas batidas do próprio funcionário (decisão da empresa, 09/11/2026).
+ * Batidas mais próximas são recusadas; uma saída antecipada é incluída pelo administrador.
+ * Atenção: a Portaria 671 proíbe restringir a marcação (veja docs/CONFORMIDADE.md).
+ */
+export const PUNCH_INTERVAL_MINUTES = 60;
+/** Batida offline a menos disso de outra é a mesma batida reenviada (a resposta se perdeu). */
+const SAME_PUNCH_WINDOW_MS = 2 * 60_000;
 const MAX_PERIOD_DAYS = 93;
 /** Batida offline aceita até este tempo depois de feita. */
 export const OFFLINE_MAX_HOURS = 72;
@@ -182,13 +188,30 @@ export class PunchesService {
         orderBy: { timestamp: 'asc' },
       });
 
-      const duplicate = nearby.find(
-        (p) =>
-          Math.abs(at.getTime() - p.timestamp.getTime()) < DUPLICATE_WINDOW_MS,
+      const distance = (p: PunchClock) =>
+        Math.abs(at.getTime() - p.timestamp.getTime());
+      // Offline: a batida pode já ter chegado online (a resposta se perdeu) e voltar pela fila
+      const same = offline
+        ? nearby.find((p) => distance(p) < SAME_PUNCH_WINDOW_MS)
+        : undefined;
+      if (same) {
+        return {
+          ...this.toResponse(same),
+          interpretedAs: interpretPunch(nearby, same.id),
+        };
+      }
+      const tooClose = nearby.find(
+        (p) => distance(p) < PUNCH_INTERVAL_MINUTES * 60_000,
       );
-      if (duplicate) {
+      if (tooClose) {
+        const release = new Date(
+          tooClose.timestamp.getTime() + PUNCH_INTERVAL_MINUTES * 60_000,
+        );
         throw new ConflictException(
-          `Marcação já registrada às ${localDateTime(duplicate.timestamp, this.tz)}. Aguarde 1 minuto para marcar novamente.`,
+          `Batida registrada às ${localDateTime(tooClose.timestamp, this.tz).slice(11, 16)}. ` +
+            `A próxima fica liberada às ${localDateTime(release, this.tz).slice(11, 16)} ` +
+            `(intervalo mínimo de ${PUNCH_INTERVAL_MINUTES} minutos). ` +
+            'Para registrar antes, peça ao administrador.',
         );
       }
 

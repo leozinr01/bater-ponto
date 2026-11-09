@@ -76,6 +76,18 @@ export const envSchema = z.object({
       (value) => !value || value.length >= 16,
       'CRON_SECRET deve ter pelo menos 16 caracteres',
     ),
+  /**
+   * Lembretes por e-mail (SMTP). Sem SMTP_HOST, ficam desligados.
+   * Gmail: SMTP_HOST=smtp.gmail.com, SMTP_PORT=465, SMTP_USER=a conta, SMTP_PASS=senha de app.
+   */
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().positive().default(465),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  /** Remetente, ex.: "Ponto <ponto@empresa.com>". Padrão: SMTP_USER. */
+  EMAIL_FROM: z.string().optional(),
+  /** Endereço do app, usado no link dos e-mails. */
+  APP_URL: z.string().url().optional(),
   /** Liga o Swagger em /swagger. Desligado por padrão para não ir ao ar por esquecimento. */
   SWAGGER_ENABLED: z
     .enum(['true', 'false'])

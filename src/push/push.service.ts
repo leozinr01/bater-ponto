@@ -10,6 +10,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import webpush, { WebPushError } from 'web-push';
+import { ReminderMailer } from './mailer';
 import { SubscribeDto } from './push.dto';
 import { dueReminders, Reminder } from './reminders';
 
@@ -27,6 +28,7 @@ export class PushService {
   constructor(
     private prisma: PrismaService,
     private punches: PunchesService,
+    private mailer: ReminderMailer,
     env: EnvService,
   ) {
     const publicKey = env.get('VAPID_PUBLIC_KEY');
@@ -42,8 +44,28 @@ export class PushService {
     this.cronSecret = env.get('CRON_SECRET');
   }
 
-  config() {
-    return { enabled: this.publicKey !== null, publicKey: this.publicKey };
+  /** O que está ligado no servidor e a preferência de e-mail do usuário. */
+  async config(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { emailReminders: true, email: true },
+    });
+    return {
+      enabled: this.publicKey !== null,
+      publicKey: this.publicKey,
+      emailEnabled: this.mailer.enabled,
+      emailReminders: user?.emailReminders ?? false,
+      email: user?.email ?? null,
+    };
+  }
+
+  /** Liga ou desliga os lembretes por e-mail do próprio usuário. */
+  async setEmailReminders(userId: string, enabled: boolean) {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { emailReminders: enabled },
+    });
+    return { emailReminders: enabled };
   }
 
   /** Guarda o aparelho. O mesmo endereço reenviado (ou de outro usuário no aparelho) é atualizado. */
@@ -80,36 +102,68 @@ export class PushService {
     return { sent };
   }
 
-  /** Chamado pelo agendador: envia os lembretes devidos agora. */
+  /**
+   * Chamado pelo agendador: envia os lembretes devidos agora, por push (aparelhos inscritos)
+   * e por e-mail (quem não desligou, com o SMTP configurado).
+   */
   async tick(authorization: string | undefined) {
     this.assertCronSecret(authorization);
-    if (!this.publicKey) return { enabled: false, sent: 0 };
+    const pushOn = this.publicKey !== null;
+    const emailOn = this.mailer.enabled;
+    if (!pushOn && !emailOn) return { enabled: false, sent: 0 };
 
     const today = await this.punches.today();
-    const subscribed = new Set(
-      (
-        await this.prisma.pushSubscription.findMany({
-          select: { userId: true },
-          distinct: ['userId'],
-        })
-      ).map((s) => s.userId),
-    );
+    const [subscriptions, emailUsers] = await Promise.all([
+      pushOn
+        ? this.prisma.pushSubscription.findMany({
+            select: { userId: true },
+            distinct: ['userId'],
+          })
+        : Promise.resolve<{ userId: string }[]>([]),
+      emailOn
+        ? this.prisma.user.findMany({
+            where: { active: true, emailReminders: true },
+            select: { id: true, email: true },
+          })
+        : Promise.resolve<{ id: string; email: string }[]>([]),
+    ]);
+    const subscribed = new Set(subscriptions.map((s) => s.userId));
+    const emailOf = new Map(emailUsers.map((u) => [u.id, u.email] as const));
     const due = dueReminders(
-      today.employees.filter((e) => subscribed.has(e.employee.id)),
+      today.employees.filter(
+        (e) => subscribed.has(e.employee.id) || emailOf.has(e.employee.id),
+      ),
       new Date(),
       today.now.slice(11, 16),
     );
 
     let sent = 0;
+    let emails = 0;
     for (const reminder of due) {
       if (!(await this.claim(reminder, today.date))) continue;
-      sent += await this.sendToUser(reminder.userId, {
-        title: reminder.title,
-        body: reminder.body,
-        tag: `lembrete-${reminder.kind}`,
-      });
+      if (subscribed.has(reminder.userId)) {
+        sent += await this.sendToUser(reminder.userId, {
+          title: reminder.title,
+          body: reminder.body,
+          tag: `lembrete-${reminder.kind}`,
+        });
+      }
+      const email = emailOf.get(reminder.userId);
+      if (
+        email &&
+        (await this.mailer.send(email, reminder.title, reminder.body))
+      ) {
+        emails++;
+      }
     }
-    return { enabled: true, due: due.length, sent };
+    return {
+      enabled: true,
+      push: pushOn,
+      email: emailOn,
+      due: due.length,
+      sent,
+      emails,
+    };
   }
 
   /** Marca o lembrete como enviado; false se outro disparo já mandou hoje. */

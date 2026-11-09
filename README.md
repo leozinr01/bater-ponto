@@ -17,7 +17,7 @@ Controle de ponto da TAI Project: o funcionário bate o ponto pelo app (no naveg
 ## O que o app faz
 
 **Funcionário**
-- **Bater ponto:** relógio, botão "Registrar entrada/saída" e o resumo de hoje: horas trabalhadas, progresso da jornada, saída prevista e a linha do tempo das marcações (entrada em verde, saída em vermelho, intervalos). Depois de uma batida, o botão fica cinza por **60 minutos** mostrando a hora da próxima; dá para bater antes com um segundo toque (a Portaria 671 proíbe impedir a marcação).
+- **Bater ponto:** relógio, botão "Registrar entrada/saída" e o resumo de hoje: horas trabalhadas, progresso da jornada, saída prevista e a linha do tempo das marcações (entrada em verde, saída em vermelho, intervalos). Depois de uma batida, o botão fica cinza por **60 minutos** mostrando a hora da próxima, e a API recusa batidas antes disso; uma saída antecipada é incluída pelo administrador.
 - **Sem internet:** o app abre offline e a batida fica guardada no celular, com o horário do relógio do servidor estimado pelo app. Quando a conexão volta, ela é enviada sozinha e fica marcada como **Offline** para o administrador conferir. A API aceita batidas offline de até 72h atrás e nunca no futuro.
 - **Registros:** aba **Por dia** com o resumo do mês e os dias agrupados por semana; aba **Marcações** com cada marcação, o endereço e as correções feitas. **Exportar** em PDF ou CSV no formato de **espelho de ponto**: data, entrada, saída e volta do intervalo, saída, horas, hora extra com o adicional, horas negativas e um resumo no fim.
 - **Banco de horas:** saldo acumulado desde o cadastro, extrato mês a mês e **gráfico da tendência** do saldo. Regras: extras de dias úteis entram 1:1; extras de **sábado** pagam primeiro as horas negativas (cada hora vale 1h30 no banco) e o que sobra vai para a **folha com 50%**; extras de **domingo e feriado** vão para a **folha com 100%**. O administrador lança ajustes (ex.: horas pagas em folha) e "Folga de banco" como tipo de abono nos Registros.
@@ -152,8 +152,8 @@ Na API de produção: `NODE_ENV=production`, `JWT_SECRET` forte e exclusivo, `CO
 
 - `POST /api/punches` registra uma marcação com o **horário do servidor**. O cliente não envia horário nem tipo.
 - Não há tipo "entrada/saída" gravado: em cada jornada, a ordem cronológica define 1ª = entrada, 2ª = saída, 3ª = entrada (volta do intervalo)... Isso permite qualquer quantidade de marcações e intervalos, e uma correção nunca deixa os tipos inconsistentes.
-- Uma segunda marcação do mesmo funcionário em menos de 1 minuto é recusada (`409`) como clique duplicado. Requisições simultâneas são serializadas por funcionário (lock no banco).
-- Fora isso, marcações nunca são bloqueadas (a Portaria 671 proíbe restringir a marcação). A espera de 60 minutos entre batidas é só na tela: o botão fica cinza, mas um segundo toque registra.
+- **Intervalo mínimo de 60 minutos** entre batidas do próprio funcionário: a segunda é recusada (`409`) com a hora em que a próxima fica liberada, e o botão fica cinza até lá. Uma saída antecipada é incluída pelo administrador nos Registros. Requisições simultâneas são serializadas por funcionário (lock no banco).
+- Fora isso, marcações nunca são bloqueadas. **Atenção:** a Portaria 671 proíbe restringir a marcação; o intervalo mínimo foi uma decisão da empresa (veja docs/CONFORMIDADE.md).
 - **Batida offline:** o corpo pode trazer `offline: { clientId, at }`. Vale o horário `at` do aparelho (até 72h atrás, nunca no futuro), a marcação fica com `offline = true` e `created_at` guarda quando chegou. O mesmo `clientId` reenviado devolve a marcação já gravada.
 - **Endereço:** com localização, a API grava o endereço aproximado (`address`) consultando o Nominatim (OpenStreetMap), com tempo limite de 2,5 s. Se falhar, a batida é gravada sem endereço. Desligue com `REVERSE_GEOCODING=false`.
 
@@ -165,6 +165,10 @@ Notificação no celular na hora de bater a entrada (até 2h depois do horário 
 2. Na Vercel (API), configure `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (ex.: `mailto:rh@suaempresa.com.br`) e `CRON_SECRET` (um texto aleatório com 16+ caracteres).
 3. No GitHub, em Settings → Secrets and variables → Actions, crie `APP_URL` (endereço do app) e `CRON_SECRET` (o mesmo valor). O workflow [lembretes.yml](.github/workflows/lembretes.yml) chama `POST /api/push/tick` a cada 5 minutos. O plano gratuito da Vercel só agenda tarefas uma vez por dia, por isso o agendador é o GitHub; o GitHub pode atrasar alguns minutos em horários de pico.
 4. Cada funcionário ativa em **Minha conta → Lembretes**. No iPhone, só funciona com o app adicionado à tela de início (iOS 16.4+).
+
+**Por e-mail** (funciona em qualquer celular, inclusive iPhone, sem instalar nada): configure na Vercel `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM` e `APP_URL` (exemplo com Gmail no `.env.example`). Os lembretes por e-mail vêm **ligados** para todos; cada um pode desligar em Minha conta → Lembretes. O mesmo agendador dispara push e e-mail, e cada lembrete sai uma vez por dia.
+
+**Dentro do site:** quem está com o app aberto vê uma faixa no topo na hora de bater a entrada ou a saída, sem precisar de permissão.
 
 ### Espelho de ponto (`GET /api/punches/timesheet`)
 

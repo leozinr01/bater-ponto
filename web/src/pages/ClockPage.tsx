@@ -15,8 +15,9 @@ import { useRegisterPunch, useTimesheet } from '../lib/queries';
 import type { RegisteredPunch } from '../lib/types';
 
 /**
- * Tempo de espera sugerido entre duas batidas. O botão fica cinza até lá, mas ainda deixa
- * bater com um segundo toque: a Portaria 671 proíbe impedir a marcação (ex.: saída antecipada).
+ * Intervalo mínimo entre duas batidas: o botão fica cinza e travado até lá. A API aplica a
+ * mesma regra (PUNCH_INTERVAL_MINUTES em src/punches/punches.service.ts); mude os dois juntos.
+ * Uma saída antecipada é incluída pelo administrador nos Registros.
  */
 const PUNCH_COOLDOWN_MINUTES = 60;
 
@@ -198,13 +199,6 @@ export function ClockPage() {
   // Batidas feitas sem internet que ainda não foram enviadas
   const pending = usePendingPunches();
   const [savedOffline, setSavedOffline] = useState<string | null>(null);
-  // Primeiro toque durante a espera só pede confirmação
-  const [confirmEarly, setConfirmEarly] = useState(false);
-  useEffect(() => {
-    if (!confirmEarly) return;
-    const id = setTimeout(() => setConfirmEarly(false), 6000);
-    return () => clearTimeout(id);
-  }, [confirmEarly]);
 
   const tz = sheet.data?.timezone;
   const todayDate = today(tz);
@@ -259,11 +253,7 @@ export function ClockPage() {
   };
 
   const onPunch = async () => {
-    if (coolingDown && !confirmEarly) {
-      setConfirmEarly(true);
-      return;
-    }
-    setConfirmEarly(false);
+    if (coolingDown) return;
     setSavedOffline(null);
     setLocating(true);
     const { location, problem } = await locateDevice();
@@ -332,19 +322,17 @@ export function ClockPage() {
               <button
                 type="button"
                 onClick={onPunch}
-                disabled={busy}
+                disabled={busy || coolingDown}
                 className={cn(
-                  'group mt-10 flex h-16 w-full max-w-xs items-center justify-center gap-3 rounded-2xl text-base font-semibold transition active:scale-[0.98] disabled:opacity-70',
-                  coolingDown && !confirmEarly
-                    ? 'bg-white/[0.08] text-slate-300 ring-1 ring-white/10 hover:bg-white/[0.12]'
-                    : confirmEarly
-                      ? 'bg-amber-500 text-ink-950 shadow-lg shadow-amber-500/25 hover:bg-amber-400'
-                      : 'animate-pulse-ring bg-brand-500 text-white shadow-lg shadow-brand-500/30 hover:bg-brand-400 disabled:animate-none',
+                  'group mt-10 flex h-16 w-full max-w-xs items-center justify-center gap-3 rounded-2xl text-base font-semibold transition',
+                  coolingDown
+                    ? 'cursor-not-allowed bg-white/[0.08] text-slate-400 ring-1 ring-white/10'
+                    : 'animate-pulse-ring bg-brand-500 text-white shadow-lg shadow-brand-500/30 hover:bg-brand-400 active:scale-[0.98] disabled:animate-none disabled:opacity-70',
                 )}
               >
                 {busy ? (
                   <Spinner className="size-5" />
-                ) : coolingDown && !confirmEarly ? (
+                ) : coolingDown ? (
                   <Clock3 className="size-6" />
                 ) : !online ? (
                   <CloudOff className="size-6" />
@@ -353,23 +341,20 @@ export function ClockPage() {
                 )}
                 {locating
                   ? 'Obtendo localização…'
-                  : confirmEarly
-                    ? `Registrar ${nextAction} agora?`
-                    : coolingDown
-                      ? `Próxima batida às ${cooldownTime}`
-                      : !online
-                        ? `Registrar ${sheet.data ? nextAction : 'ponto'} offline`
-                        : sheet.data || pending.length
-                          ? `Registrar ${nextAction}`
-                          : 'Registrar ponto'}
+                  : coolingDown
+                    ? `Próxima batida às ${cooldownTime}`
+                    : !online
+                      ? `Registrar ${sheet.data ? nextAction : 'ponto'} offline`
+                      : sheet.data || pending.length
+                        ? `Registrar ${nextAction}`
+                        : 'Registrar ponto'}
               </button>
 
               <div className="mt-5 min-h-6 space-y-2 text-sm">
-                {(confirmEarly || (coolingDown && !busy)) && (
+                {coolingDown && !busy && (
                   <p className="mx-auto max-w-xs text-xs text-slate-400">
-                    {confirmEarly
-                      ? 'Toque de novo para registrar antes do intervalo de 1 hora.'
-                      : `Espere ${PUNCH_COOLDOWN_MINUTES} min entre as batidas. Se precisar registrar antes, toque duas vezes.`}
+                    Intervalo mínimo de {PUNCH_COOLDOWN_MINUTES} minutos entre as batidas. Se precisar registrar antes
+                    (ex.: saída antecipada), peça ao administrador.
                   </p>
                 )}
                 {pending.length > 0 && (

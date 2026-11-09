@@ -6,6 +6,7 @@ import {
   Get,
   Headers,
   HttpCode,
+  Patch,
   Post,
 } from '@nestjs/common';
 import {
@@ -14,7 +15,7 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { SubscribeDto, UnsubscribeDto } from './push.dto';
+import { EmailRemindersDto, SubscribeDto, UnsubscribeDto } from './push.dto';
 import { PushService } from './push.service';
 
 @ApiTags('Lembretes')
@@ -27,8 +28,14 @@ export class PushController {
   @ApiOperation({
     summary: 'Se os lembretes estão ligados e a chave pública VAPID',
   })
-  config() {
-    return this.push.config();
+  config(@CurrentUser() user: AuthUser) {
+    return this.push.config(user.id);
+  }
+
+  @Patch('email')
+  @ApiOperation({ summary: 'Liga ou desliga os meus lembretes por e-mail' })
+  setEmail(@CurrentUser() user: AuthUser, @Body() dto: EmailRemindersDto) {
+    return this.push.setEmailReminders(user.id, dto.enabled);
   }
 
   @Post('subscriptions')

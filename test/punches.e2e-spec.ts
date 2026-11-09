@@ -111,6 +111,37 @@ describe('Ponto (e2e)', () => {
       ).toBeLessThan(10_000);
     });
 
+    it('exige 60 minutos entre batidas do funcionário', async () => {
+      const recent = await createUser(ctx);
+      await ctx.prisma.punchClock.create({
+        data: {
+          userId: recent.id,
+          timestamp: new Date(Date.now() - 30 * 60_000),
+        },
+      });
+      const blocked = await ctx
+        .http()
+        .post('/api/punches')
+        .set(authHeader(ctx, recent))
+        .send();
+      expect(blocked.status).toBe(409);
+      expect(blocked.body.message).toMatch(/liberada às \d{2}:\d{2}/);
+
+      const later = await createUser(ctx);
+      await ctx.prisma.punchClock.create({
+        data: {
+          userId: later.id,
+          timestamp: new Date(Date.now() - 61 * 60_000),
+        },
+      });
+      const allowed = await ctx
+        .http()
+        .post('/api/punches')
+        .set(authHeader(ctx, later))
+        .send();
+      expect(allowed.status).toBe(201);
+    });
+
     it('cliques simultâneos geram uma única marcação', async () => {
       const employee = await createUser(ctx);
       const headers = authHeader(ctx, employee);

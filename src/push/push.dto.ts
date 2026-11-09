@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsNotEmpty,
   IsString,
   IsUrl,
@@ -35,4 +36,10 @@ export class UnsubscribeDto {
   @IsNotEmpty()
   @MaxLength(1000)
   endpoint: string;
+}
+
+export class EmailRemindersDto {
+  @ApiProperty()
+  @IsBoolean({ message: 'enabled deve ser true ou false' })
+  enabled: boolean;
 }

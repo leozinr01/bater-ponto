@@ -57,7 +57,7 @@ export class PunchesController {
   @ApiBody({ type: RegisterPunchDto, required: false })
   @ApiCreatedResponse({ type: RegisterPunchResponseDto })
   @ApiConflictResponse({
-    description: 'Marcação duplicada em menos de 1 minuto',
+    description: 'Menos de 60 minutos desde a última batida (intervalo mínimo)',
   })
   // Corpo sem validação de propósito: localização ausente ou inválida vira
   // "sem localização" em vez de recusar a marcação

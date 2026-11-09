@@ -62,8 +62,9 @@ function flush(userId: string, onRejected: (punch: QueuedPunch, message: string)
           });
         } catch (err) {
           if (!(err instanceof ApiError) || err.kind !== 'http') break; // sem rede ou sessão expirada: fica para a próxima
-          // 409 = a mesma batida já tinha chegado (a resposta se perdeu no caminho): nada a avisar
-          if (err.status !== 409) onRejected(punch, err.message);
+          // A mesma batida que já tinha chegado volta como sucesso; erro aqui é recusa de verdade
+          // (ex.: menos de 60 min de outra batida, ou antiga demais)
+          onRejected(punch, err.message);
         }
         write(read().filter((p) => p.clientId !== clientId));
       }

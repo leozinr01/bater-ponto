@@ -16,6 +16,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { useOfflineSync } from '../lib/offline-queue';
+import { ReminderBanner } from './ReminderBanner';
 import { useToast } from './toast';
 import { Avatar, cn } from './ui';
 
@@ -235,6 +236,7 @@ export function Layout() {
           className="max-w-[1440px] animate-fade-in px-4 pt-6 pb-[calc(env(safe-area-inset-bottom)+6rem)] sm:px-6 lg:px-8 lg:py-8"
           key={location.pathname}
         >
+          <ReminderBanner />
           <Outlet />
         </main>
       </div>

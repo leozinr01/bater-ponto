@@ -20,7 +20,7 @@
 | --- | --- |
 | Marcações originais não podem ser alteradas nem apagadas | Correções só desconsideram (`voidedAt`) e incluem marcações. Não há UPDATE de horário nem DELETE, e um trigger no PostgreSQL recusa essas operações mesmo feitas direto no banco (migrations `marcacoes_imutaveis` e `marcacoes_imutaveis_reforco`); desconsiderar exige autor e motivo também no banco. Consequência: um usuário que incluiu ou desconsiderou marcações não pode ser excluído direto no banco (o sistema nunca exclui ninguém, só desativa) |
 | Tratamento de marcações com motivo e rastreabilidade | Toda correção exige justificativa e grava autor, data e vínculo com a original |
-| Proibido restringir a marcação | Marcações sempre aceitas, exceto duplicatas em menos de 1 minuto. A espera de 60 minutos entre batidas é só visual (botão cinza): um segundo toque registra normalmente |
+| Proibido restringir a marcação | **Não atendido desde 09/11/2026, por decisão da empresa:** o funcionário não consegue bater de novo antes de 60 minutos da última batida (a API recusa e o botão fica cinza). Uma saída antecipada só entra por inclusão do administrador, com justificativa. Isso pode ser entendido como restrição à marcação (Portaria 671, art. 77): avalie com o jurídico ou volte o intervalo para 1 minuto em `PUNCH_INTERVAL_MINUTES` (src/punches/punches.service.ts) e na tela de ponto |
 | Proibida marcação automática | Toda marcação nasce de ação do funcionário ou de correção justificada do admin |
 | Proibido exigir autorização prévia para hora extra | Não existe esse fluxo |
 | Funcionário acessa os próprios registros | Histórico (inclusive correções) e espelho disponíveis ao próprio funcionário |
