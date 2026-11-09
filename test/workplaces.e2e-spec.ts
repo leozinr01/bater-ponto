@@ -42,6 +42,8 @@ describe('Geolocalização (e2e)', () => {
       accuracyMeters: 12,
       workplaceName: null,
       distanceMeters: null,
+      // Endereço desligado nos testes (REVERSE_GEOCODING=false): não depende da internet
+      address: null,
     });
   });
 
