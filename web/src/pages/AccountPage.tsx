@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
-import { CalendarClock, KeyRound, Mail, ShieldCheck, UserRound } from 'lucide-react';
+import { CalendarClock, KeyRound, LogOut, Mail, ShieldCheck, UserRound } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useToast } from '../components/toast';
 import { Alert, Avatar, Badge, Button, Card, CardHeader, cn, Field, Input, PageHeader, Skeleton } from '../components/ui';
@@ -10,7 +10,7 @@ import { useTimesheet } from '../lib/queries';
 import type { Tokens } from '../lib/types';
 
 export function AccountPage() {
-  const { user, isAdmin, replaceTokens } = useAuth();
+  const { user, isAdmin, replaceTokens, logout } = useAuth();
   const toast = useToast();
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
@@ -51,7 +51,17 @@ export function AccountPage() {
 
   return (
     <>
-      <PageHeader icon={UserRound} title="Minha conta" description="Seus dados, sua jornada e sua senha." />
+      <PageHeader
+        icon={UserRound}
+        title="Minha conta"
+        description="Seus dados, sua jornada e sua senha."
+        // No celular é o único lugar para sair (no computador também há o botão no menu lateral)
+        actions={
+          <Button variant="secondary" icon={LogOut} onClick={logout} className="w-full sm:w-auto">
+            Sair da conta
+          </Button>
+        }
+      />
 
       <div className="grid gap-6 lg:grid-cols-5">
         <div className="space-y-6 lg:col-span-3">

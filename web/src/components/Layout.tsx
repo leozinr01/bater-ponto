@@ -249,6 +249,7 @@ export function Layout() {
       <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-white/[0.06] bg-ink-950/90 px-2 pb-[env(safe-area-inset-bottom)] backdrop-blur-lg lg:hidden print:hidden">
         <TabItem to="/" label="Ponto" icon={Fingerprint} end />
         <TabItem to="/registros" label="Registros" icon={ClipboardList} />
+        <TabItem to="/banco-de-horas" label="Banco" icon={PiggyBank} />
         {isAdmin && (
           <button
             type="button"
