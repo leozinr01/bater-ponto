@@ -2,6 +2,7 @@ import { CalendarDays, Lock, LogIn, ShieldCheck, Zap } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { APP_NAME, COMPANY, Logo } from '../components/Layout';
+import { requestLoginAlert } from '../components/NotificationBell';
 import { Alert, Button, Field, Input } from '../components/ui';
 import { errorMessage } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -28,6 +29,8 @@ export function LoginPage() {
     setError('');
     setSubmitting(true);
     try {
+      // Marca antes do login: ao entrar, o layout mostra os avisos pendentes com som
+      requestLoginAlert();
       await login(email, password);
       navigate('/', { replace: true });
     } catch (err) {

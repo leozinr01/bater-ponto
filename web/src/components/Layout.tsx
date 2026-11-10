@@ -16,7 +16,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { useOfflineSync } from '../lib/offline-queue';
-import { ReminderBanner } from './ReminderBanner';
+import { NotificationAlerts, NotificationBell } from './NotificationBell';
 import { useToast } from './toast';
 import { Avatar, cn } from './ui';
 
@@ -94,8 +94,9 @@ function Sidebar() {
 
   return (
     <div className="flex h-full flex-col border-r border-white/[0.06] bg-ink-950 bg-[radial-gradient(ellipse_at_top_left,rgba(59,109,255,0.18),transparent_55%)]">
-      <div className="px-5 pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-8">
+      <div className="flex items-center justify-between gap-2 px-5 pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-8">
         <Logo />
+        <NotificationBell align="left" />
       </div>
 
       <nav className="flex-1 space-y-6 overflow-y-auto px-3">
@@ -226,20 +227,23 @@ export function Layout() {
       </div>
 
       <div className="lg:pl-64">
-        {/* Topo do celular: só a marca (a navegação fica embaixo, como num app) */}
-        <header className="sticky top-0 z-20 flex items-center border-b border-white/[0.06] bg-ink-950/80 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-md lg:hidden print:hidden">
+        {/* Topo do celular: a marca e o sininho (a navegação fica embaixo, como num app) */}
+        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-white/[0.06] bg-ink-950/80 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-md lg:hidden print:hidden">
           <div className="flex h-14 items-center">
             <Logo />
           </div>
+          <NotificationBell />
         </header>
         <main
           className="max-w-[1440px] animate-fade-in px-4 pt-6 pb-[calc(env(safe-area-inset-bottom)+6rem)] sm:px-6 lg:px-8 lg:py-8"
           key={location.pathname}
         >
-          <ReminderBanner />
           <Outlet />
         </main>
       </div>
+
+      {/* Alerta dos avisos ao entrar e quando surge um aviso novo */}
+      <NotificationAlerts />
 
       {/* Barra de abas do celular */}
       <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-white/[0.06] bg-ink-950/90 px-2 pb-[env(safe-area-inset-bottom)] backdrop-blur-lg lg:hidden print:hidden">

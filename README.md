@@ -21,7 +21,8 @@ Controle de ponto da TAI Project: o funcionário bate o ponto pelo app (no naveg
 - **Sem internet:** o app abre offline e a batida fica guardada no celular, com o horário do relógio do servidor estimado pelo app. Quando a conexão volta, ela é enviada sozinha e fica marcada como **Offline** para o administrador conferir. A API aceita batidas offline de até 72h atrás e nunca no futuro.
 - **Registros:** aba **Por dia** com o resumo do mês e os dias agrupados por semana; aba **Marcações** com cada marcação, o endereço e as correções feitas. **Exportar** em PDF ou CSV no formato de **espelho de ponto**: data, entrada, saída e volta do intervalo, saída, horas, hora extra com o adicional, horas negativas e um resumo no fim.
 - **Banco de horas:** saldo acumulado desde o cadastro, extrato mês a mês e **gráfico da tendência** do saldo. Regras: extras de dias úteis entram 1:1; extras de **sábado** pagam primeiro as horas negativas (cada hora vale 1h30 no banco) e o que sobra vai para a **folha com 50%**; extras de **domingo e feriado** vão para a **folha com 100%**. O administrador lança ajustes (ex.: horas pagas em folha) e "Folga de banco" como tipo de abono nos Registros.
-- **Minha conta:** dados, jornada, troca de senha e **lembretes** (notificação no celular na hora da entrada e quando completar as horas do dia).
+- **Minha conta:** dados, jornada e troca de senha.
+- **Avisos (sininho):** no topo do site, com o número de avisos não vistos em vermelho: hora de bater a entrada, jornada cumprida (registrar a saída), marcação faltando, falta nos últimos 7 dias e batida aguardando internet; para o admin, também funcionários atrasados e batidas fora do local. Ao entrar no site (depois do login ou na primeira abertura do dia) aparece um alerta com os avisos pendentes e um som curto; avisos novos com o site aberto também tocam o som. Os avisos são calculados no próprio site, sem notificação do sistema.
 
 **Administrador** (além do acima)
 - **Hoje:** painel ao vivo da equipe: quem está trabalhando, em intervalo, atrasado, ainda não chegou, encerrou ou está de folga, com horas do dia e progresso da jornada. Atualiza a cada minuto.
@@ -159,6 +160,8 @@ Na API de produção: `NODE_ENV=production`, `JWT_SECRET` forte e exclusivo, `CO
 
 ### Lembretes push
 
+> Opcional e hoje sem uso: o app é só site, e os avisos ficam no sininho. A estrutura de push (e e-mail) continua no código caso um dia seja útil.
+
 Notificação no celular na hora de bater a entrada (até 2h depois do horário previsto, se ainda não bateu) e quando a carga do dia for cumprida (se ainda está trabalhando). Cada lembrete sai uma vez por dia. Para ligar:
 
 1. Gere as chaves: `npx web-push generate-vapid-keys`.
@@ -168,7 +171,6 @@ Notificação no celular na hora de bater a entrada (até 2h depois do horário 
 
 **Por e-mail** (funciona em qualquer celular, inclusive iPhone, sem instalar nada): configure na Vercel `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM` e `APP_URL` (exemplo com Gmail no `.env.example`). Os lembretes por e-mail vêm **ligados** para todos; cada um pode desligar em Minha conta → Lembretes. O mesmo agendador dispara push e e-mail, e cada lembrete sai uma vez por dia.
 
-**Dentro do site:** quem está com o app aberto vê uma faixa no topo na hora de bater a entrada ou a saída, sem precisar de permissão.
 
 ### Espelho de ponto (`GET /api/punches/timesheet`)
 

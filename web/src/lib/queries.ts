@@ -67,11 +67,13 @@ export function useReport(params: { from: string; to: string; page: number }) {
 }
 
 /** Painel do dia (admin), atualizado a cada minuto. */
-export function useToday() {
+export function useToday(enabled = true) {
   return useQuery({
     queryKey: ['today'],
     queryFn: () => api<TodayOverview>('/punches/today'),
     refetchInterval: 60_000,
+    // Só administradores podem ler (os avisos do sininho chamam com enabled = isAdmin)
+    enabled,
   });
 }
 
