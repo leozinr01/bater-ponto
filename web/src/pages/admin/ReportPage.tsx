@@ -225,7 +225,7 @@ export function ReportPage() {
                 <table className={table.table}>
                   <thead className={table.thead}>
                     <tr>
-                      <th className={table.th}>Funcionário</th>
+                      <th className={cn(table.th, table.sticky)}>Funcionário</th>
                       <th className={cn(table.th, 'text-right')}>Trabalhado</th>
                       <th className={cn(table.th, 'text-right')}>Previsto</th>
                       <th className={cn(table.th, 'text-right')}>Saldo</th>
@@ -262,7 +262,7 @@ export function ReportPage() {
                   <tbody className={table.tbody}>
                     {items.map(({ employee, totals: t, hourBankMinutes }) => (
                       <tr key={employee.id} className={cn(table.tr, 'group')}>
-                        <td className={table.td}>
+                        <td className={cn(table.td, table.sticky)}>
                           <div className="flex items-center gap-3">
                             <Avatar name={employee.name} size="sm" />
                             <span className="font-medium text-white">{employee.name}</span>

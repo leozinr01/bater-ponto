@@ -344,7 +344,7 @@ export function EmployeesPage() {
               <table className={table.table}>
                 <thead className={table.thead}>
                   <tr>
-                    <th className={table.th}>Funcionário</th>
+                    <th className={cn(table.th, table.sticky)}>Funcionário</th>
                     <th className={table.th}>Perfil</th>
                     <th className={table.th}>Jornada</th>
                     <th className={table.th}>Status</th>
@@ -358,7 +358,7 @@ export function EmployeesPage() {
                     const s = schedule(e.workScheduleId);
                     return (
                       <tr key={e.id} className={cn(table.tr, !e.active && 'opacity-50')}>
-                        <td className={table.td}>
+                        <td className={cn(table.td, table.sticky)}>
                           <div className="flex items-center gap-3">
                             <Avatar name={e.name} />
                             <div className="min-w-0">

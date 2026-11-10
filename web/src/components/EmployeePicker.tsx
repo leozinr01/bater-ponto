@@ -29,21 +29,21 @@ export function EmployeePicker({
   const selectedMissing = value && !list.some((e) => e.id === value);
 
   return (
-    <div className="flex gap-2">
+    <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:flex-nowrap">
       {needsSearch && (
         <Input
           type="search"
           placeholder="Buscar funcionário"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-44"
+          className="w-full sm:w-44"
           aria-label="Buscar funcionário"
         />
       )}
       <Select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-56"
+        className="w-full sm:w-56"
         aria-label="Funcionário"
       >
         <option value="">{user?.name} (eu)</option>

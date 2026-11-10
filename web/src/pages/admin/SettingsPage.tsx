@@ -12,7 +12,10 @@ export function SettingsPage() {
   return (
     <>
       <p className="mb-3 text-[11px] font-semibold tracking-wider text-slate-500 uppercase print:hidden">Configurações</p>
-      <nav aria-label="Configurações" className="mb-6 flex gap-6 border-b border-white/[0.06] print:hidden">
+      <nav
+        aria-label="Configurações"
+        className="mb-6 flex gap-6 overflow-x-auto border-b border-white/[0.06] whitespace-nowrap [scrollbar-width:none] print:hidden"
+      >
         {tabs.map((tab) => (
           <NavLink
             key={tab.to}

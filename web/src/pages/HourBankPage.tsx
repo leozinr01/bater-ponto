@@ -285,7 +285,7 @@ export function HourBankPage() {
                 <table className={table.table}>
                   <thead className={table.thead}>
                     <tr>
-                      <th className={table.th}>Mês</th>
+                      <th className={cn(table.th, table.sticky)}>Mês</th>
                       <th className={cn(table.th, 'text-right')}>Extras</th>
                       <th className={cn(table.th, 'text-right')}>Sábado</th>
                       <th className={cn(table.th, 'text-right')}>Falta</th>
@@ -301,7 +301,7 @@ export function HourBankPage() {
                   <tbody className={table.tbody}>
                     {[...data.months].reverse().map((m) => (
                       <tr key={m.month} className={table.tr}>
-                        <td className={cn(table.td, 'font-medium whitespace-nowrap text-white')}>
+                        <td className={cn(table.td, table.sticky, 'font-medium whitespace-nowrap text-white')}>
                           {formatMonth(m.month)}
                           {m.pendingDays > 0 && (
                             <span className="ml-2 text-[11px] font-normal text-amber-300">{m.pendingDays} pendente(s)</span>

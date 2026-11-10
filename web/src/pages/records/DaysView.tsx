@@ -39,9 +39,9 @@ const isOff = (d: TimesheetDay) => !d.scheduled && !d.holiday && !d.absence && d
 
 function SummaryItem({ label, value, hint }: { label: string; value: ReactNode; hint?: string }) {
   return (
-    <div className="flex-1 px-5 py-4">
+    <div className="min-w-0 flex-1 px-3 py-4 sm:px-5">
       <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-bold text-white tabular-nums">{value}</p>
+      <p className="mt-1 text-xl font-bold text-white tabular-nums sm:text-2xl">{value}</p>
       {hint && <p className="text-xs text-slate-500 tabular-nums">{hint}</p>}
     </div>
   );

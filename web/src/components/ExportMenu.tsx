@@ -55,7 +55,8 @@ export function ExportMenu<T extends string = 'pdf' | 'csv'>({
       {open && (
         <div
           role="menu"
-          className="animate-fade-in absolute right-0 z-30 mt-2 w-60 overflow-hidden rounded-xl bg-ink-800 p-1 shadow-xl ring-1 shadow-black/40 ring-white/10"
+          // No celular abre como uma folha acima da barra de abas (não sai da tela); no computador, abaixo do botão
+          className="animate-fade-in fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-50 overflow-hidden rounded-xl bg-ink-800 p-1 shadow-2xl ring-1 shadow-black/50 ring-white/10 sm:absolute sm:inset-x-auto sm:right-0 sm:bottom-auto sm:mt-2 sm:w-60"
         >
           {options.map(({ value, label, hint, icon: Icon }) => (
             <button

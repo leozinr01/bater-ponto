@@ -120,7 +120,13 @@ export function Segmented<T extends string>({
   className?: string;
 }) {
   return (
-    <div className={cn('inline-flex rounded-xl bg-ink-800 p-1 ring-1 ring-white/10 ring-inset', className)}>
+    // No celular, opções que não cabem rolam para o lado em vez de estourar a tela
+    <div
+      className={cn(
+        'inline-flex max-w-full overflow-x-auto rounded-xl bg-ink-800 p-1 ring-1 ring-white/10 ring-inset [scrollbar-width:none]',
+        className,
+      )}
+    >
       {options.map((o) => (
         <button
           key={o.value}
@@ -128,7 +134,7 @@ export function Segmented<T extends string>({
           onClick={() => onChange(o.value)}
           aria-pressed={value === o.value}
           className={cn(
-            'flex-1 rounded-lg px-3 py-1.5 text-[13px] font-medium whitespace-nowrap transition-colors',
+            'flex-1 shrink-0 rounded-lg px-2.5 py-1.5 text-[13px] font-medium whitespace-nowrap transition-colors sm:px-3',
             value === o.value ? 'bg-ink-600 text-white shadow-sm' : 'text-slate-400 hover:text-white',
           )}
         >
@@ -304,8 +310,8 @@ export function PageHeader({
   icon?: Icon;
 }) {
   return (
-    <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-      <div className="flex items-center gap-4">
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-4 sm:mb-8">
+      <div className="flex min-w-0 items-center gap-4">
         {IconCmp && (
           <span className="hidden size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500/25 to-brand-700/10 text-brand-300 ring-1 ring-brand-400/20 sm:flex print:hidden">
             <IconCmp className="size-6" />
@@ -316,7 +322,8 @@ export function PageHeader({
           {description && <p className="mt-0.5 text-sm text-slate-400">{description}</p>}
         </div>
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2 print:hidden">{actions}</div>}
+      {/* No celular os controles ocupam a linha toda, abaixo do título */}
+      {actions && <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto print:hidden">{actions}</div>}
     </div>
   );
 }
@@ -390,6 +397,8 @@ export const table = {
   tbody: 'divide-y divide-white/[0.04]',
   tr: 'transition-colors hover:bg-white/[0.02]',
   td: 'px-4 py-3',
+  /** Primeira coluna fixa ao rolar a tabela para o lado (celular); fundo igual ao do Card. */
+  sticky: 'sticky left-0 z-10 bg-ink-850',
 };
 
 export function Pagination({
