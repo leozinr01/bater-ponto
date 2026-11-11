@@ -11,7 +11,7 @@ import { errorMessage } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { formatDate, formatMinutes, monthRange, timeOf, today, WEEKDAYS } from '../../lib/format';
 import { useHourBank, useTimesheet } from '../../lib/queries';
-import type { TimesheetDay } from '../../lib/types';
+import type { Timesheet, TimesheetDay } from '../../lib/types';
 
 type Filter = 'all' | 'pending' | 'absent' | 'alerts';
 
@@ -149,43 +149,108 @@ function DayRow({
   );
 }
 
-/** Tabela no formato do espelho de ponto, só para impressão. */
+/** Tabela do espelho de ponto no formato impresso (Ctrl+P), estilizada no CSS @media print. */
 function PrintTable({ days }: { days: TimesheetDay[] }) {
+  const periods = (d: TimesheetDay) => {
+    const times = d.punches.map((p) => timeOf(p.localTime));
+    const [entry, breakOut, breakIn, exit] =
+      times.length <= 2 ? [times[0], undefined, undefined, times[1]] : times;
+    return { entry: entry ?? '–', breakOut: breakOut ?? '–', breakIn: breakIn ?? '–', exit: exit ?? '–', extra: times.slice(4) };
+  };
+  const statusText = (d: TimesheetDay) => {
+    if (d.holiday) return `Feriado: ${d.holiday}`;
+    if (d.absence) return d.absence.reason;
+    if (d.status === 'absent') return 'Falta';
+    if (d.status === 'incomplete') return 'Incompleto';
+    if (d.status === 'in_progress') return 'Em andamento';
+    if (d.status === 'complete' && d.punches.length === 0) return d.scheduled ? '–' : 'Folga';
+    return 'Completo';
+  };
+  const extra = (d: TimesheetDay) =>
+    d.overtimeMinutes ? `${formatMinutes(d.overtimeMinutes)} (${d.overtimeRate}%)` : '–';
+  const neg = (d: TimesheetDay) => (d.deficitMinutes ? formatMinutes(d.deficitMinutes) : '–');
+  const late = (d: TimesheetDay) => (d.lateMinutes ? formatMinutes(d.lateMinutes) : '–');
+  const balance = (d: TimesheetDay) => {
+    if (d.overtimeMinutes === null && d.deficitMinutes === null) return '–';
+    const b = (d.overtimeMinutes ?? 0) - (d.deficitMinutes ?? 0);
+    return `${b > 0 ? '+' : ''}${formatMinutes(b)}`;
+  };
   return (
-    <table className="hidden w-full text-sm print:table">
+    <table className="print-timesheet hidden print:table">
       <thead>
-        <tr className="border-b text-left">
-          <th className="py-1">Dia</th>
-          <th className="py-1">Marcações</th>
-          <th className="py-1 text-right">Trabalhado</th>
-          <th className="py-1 text-right">Intervalo</th>
-          <th className="py-1 text-right">Atraso</th>
-          <th className="py-1 text-right">Saldo</th>
-          <th className="py-1">Situação</th>
+        <tr>
+          <th>Data</th>
+          <th>Dia</th>
+          <th>Entrada</th>
+          <th>Saída intv.</th>
+          <th>Volta intv.</th>
+          <th>Saída</th>
+          <th className="num">Trabalhado</th>
+          <th className="num">Hora extra</th>
+          <th className="num">Negativo</th>
+          <th className="num">Atraso</th>
+          <th className="num">Saldo</th>
+          <th>Situação</th>
         </tr>
       </thead>
       <tbody>
-        {days.map((d) => (
-          <tr key={d.date} className="border-b">
-            <td className="py-1">
-              {formatDate(d.date, false)} {WEEKDAYS[d.weekday]}
-            </td>
-            <td className="py-1 tabular-nums">{d.punches.map((p) => timeOf(p.localTime)).join('  ')}</td>
-            <td className="py-1 text-right tabular-nums">{d.punches.length ? formatMinutes(d.workedMinutes) : '–'}</td>
-            <td className="py-1 text-right tabular-nums">{d.breakMinutes ? formatMinutes(d.breakMinutes) : '–'}</td>
-            <td className="py-1 text-right tabular-nums">{d.lateMinutes ? formatMinutes(d.lateMinutes) : '–'}</td>
-            <td className="py-1 text-right tabular-nums">
-              <Balance overtime={d.overtimeMinutes} deficit={d.deficitMinutes} />
-            </td>
-            <td className="py-1">
-              {d.holiday ? `Feriado: ${d.holiday}` : <DayStatusBadge day={d} />}
-              {d.absence && ` · ${d.absence.reason}`}
-              {d.alerts.length > 0 && ` · ${d.alerts.map((a) => alertLabels[a].label).join(', ')}`}
-            </td>
-          </tr>
-        ))}
+        {days.map((d) => {
+          const p = periods(d);
+          const weekend = d.weekday === 0 || d.weekday === 6;
+          return (
+            <tr key={d.date} className={weekend ? 'weekend' : undefined}>
+              <td className="num">{formatDate(d.date, false)}</td>
+              <td>{WEEKDAYS[d.weekday]}</td>
+              <td className="num">{p.entry}</td>
+              <td className="num">{p.breakOut}</td>
+              <td className="num">{p.breakIn}</td>
+              <td className="num">{p.exit}</td>
+              <td className="num">{d.punches.length ? formatMinutes(d.workedMinutes) : '–'}</td>
+              <td className="num">{extra(d)}</td>
+              <td className="num">{neg(d)}</td>
+              <td className="num">{late(d)}</td>
+              <td className="num">{balance(d)}</td>
+              <td>
+                {statusText(d)}
+                {d.alerts.length > 0 && ` · ${d.alerts.map((a) => alertLabels[a].label).join(', ')}`}
+              </td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
+  );
+}
+
+/** Resumo e assinaturas no modo impressão. */
+function PrintFooter({ totals }: { totals: Timesheet['totals'] }) {
+  const row = (label: string, value: string | number | null | undefined) => (
+    <>
+      <dt>{label}</dt>
+      <dd className="num">{typeof value === 'number' ? value : formatMinutes(value as number | null | undefined)}</dd>
+    </>
+  );
+  return (
+    <>
+      <div className="print-summary hidden print:block">
+        <h2>Resumo do período</h2>
+        <dl>
+          {row('Horas trabalhadas', totals.workedMinutes)}
+          {row('Hora extra 50%', totals.overtime50Minutes)}
+          {row('Horas previstas', totals.expectedMinutes)}
+          {row('Hora extra 100%', totals.overtime100Minutes)}
+          {row('Horas negativas', totals.deficitMinutes)}
+          {row('Atrasos', totals.lateMinutes)}
+          {row('Faltas (dias)', totals.absentDays)}
+          {row('Dias incompletos', totals.incompleteDays)}
+        </dl>
+      </div>
+      <div className="print-signatures hidden print:grid">
+        <div>Assinatura do funcionário</div>
+        <div />
+        <div>Assinatura do responsável</div>
+      </div>
+    </>
   );
 }
 
@@ -223,12 +288,18 @@ export function DaysView({ employeeId, month }: { employeeId: string; month: str
 
   return (
     <div className={cn('space-y-6 transition-opacity', sheet.isFetching && 'opacity-60')}>
-      {/* Cabeçalho só da impressão: o documento oficial se chama espelho de ponto */}
-      <div className="hidden print:block">
-        <h1 className="text-xl font-bold">Espelho de ponto</h1>
-        <p>
-          {data.employee.name} · {formatDate(from)} a {formatDate(to)} · fuso {data.timezone}
-        </p>
+      {/* Cabeçalho só da impressão (Ctrl+P): o documento oficial se chama espelho de ponto */}
+      <div className="print-header hidden print:block">
+        <h1>Espelho de ponto</h1>
+        <div className="print-meta">
+          <div><b>Funcionário:</b> {data.employee.name}</div>
+          <div><b>Período:</b> {formatDate(from)} a {formatDate(to)}</div>
+          <div>
+            <b>Jornada:</b>{' '}
+            {data.schedule ? `${data.schedule.name} (início ${data.schedule.startTime})` : 'Não definida'}
+          </div>
+          <div><b>Fuso horário:</b> {data.timezone}</div>
+        </div>
       </div>
 
       {/* Resumo do mês */}
@@ -339,6 +410,7 @@ export function DaysView({ employeeId, month }: { employeeId: string; month: str
       </div>
 
       <PrintTable days={data.days} />
+      <PrintFooter totals={data.totals} />
 
       {adding && (
         <AddPunchModal

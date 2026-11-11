@@ -78,21 +78,40 @@ async function exportSummary(from: string, to: string, format: ExportFormat) {
     t.outsideLocationPunches,
     formatMinutes(hourBankMinutes),
   ]);
+  const trabalhado = total((t) => t.workedMinutes);
+  const extras50 = total((t) => t.overtime50Minutes);
+  const extras100 = total((t) => t.overtime100Minutes);
+  const neg = total((t) => t.deficitMinutes);
+  const atrasos = total((t) => t.lateMinutes);
+  const faltas = total((t) => t.absentDays);
+
   await exportTable(format, {
     filename: `relatorio-ponto_${from}_${to}`,
     title: 'Relatório do período',
-    subtitle: `${formatDate(from)} a ${formatDate(to)} · ${items.length} funcionário(s)`,
+    subtitle: `Totais consolidados por funcionário`,
+    meta: [
+      ['Período', `${formatDate(from)} a ${formatDate(to)}`],
+      ['Funcionários', String(items.length)],
+      ['Emissão', new Date().toLocaleDateString('pt-BR')],
+      ['Formato', 'Resumo consolidado'],
+    ],
     sections: [
       {
         head,
         rows,
+        highlights: [
+          { label: 'Trabalhado', value: formatMinutes(trabalhado), tone: 'brand' },
+          { label: 'Hora extra', value: formatMinutes(extras50 + extras100), tone: 'amber' },
+          { label: 'Horas negativas', value: formatMinutes(neg), tone: neg ? 'red' : 'gray' },
+          { label: 'Faltas', value: `${faltas} dia(s)`, tone: faltas ? 'red' : 'gray' },
+        ],
         summary: [
-          ['Horas trabalhadas', formatMinutes(total((t) => t.workedMinutes))],
-          ['Hora extra 50%', formatMinutes(total((t) => t.overtime50Minutes))],
-          ['Hora extra 100%', formatMinutes(total((t) => t.overtime100Minutes))],
-          ['Horas negativas', formatMinutes(total((t) => t.deficitMinutes))],
-          ['Atrasos', formatMinutes(total((t) => t.lateMinutes))],
-          ['Faltas (dias)', total((t) => t.absentDays)],
+          ['Horas trabalhadas', formatMinutes(trabalhado)],
+          ['Hora extra 50% (sábado e úteis)', formatMinutes(extras50)],
+          ['Hora extra 100% (domingo e feriado)', formatMinutes(extras100)],
+          ['Horas negativas', formatMinutes(neg)],
+          ['Atrasos', formatMinutes(atrasos)],
+          ['Faltas (dias)', faltas],
         ],
       },
     ],
@@ -109,8 +128,14 @@ async function exportByDay(from: string, to: string, format: ExportFormat) {
   }
   await exportTable(format, {
     filename: `relatorio-ponto-por-dia_${from}_${to}`,
-    title: 'Relatório do período · detalhado por dia',
-    subtitle: `${formatDate(from)} a ${formatDate(to)} · ${items.length} funcionário(s)`,
+    title: 'Relatório do período',
+    subtitle: 'Espelho detalhado por funcionário',
+    meta: [
+      ['Período', `${formatDate(from)} a ${formatDate(to)}`],
+      ['Funcionários', String(items.length)],
+      ['Emissão', new Date().toLocaleDateString('pt-BR')],
+      ['Formato', 'Detalhado por dia'],
+    ],
     sections,
   });
 }

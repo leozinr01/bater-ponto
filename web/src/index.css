@@ -128,20 +128,140 @@ input::-webkit-calendar-picker-indicator {
   cursor: pointer;
 }
 
-/* Impressão (espelho de ponto): papel branco, texto preto, sem fundos */
+/* Impressão (espelho de ponto): papel branco, texto preto, visual profissional */
+@page {
+  size: A4 landscape;
+  margin: 15mm 12mm;
+}
+
 @media print {
   html {
     color-scheme: light;
   }
   body {
     background: #fff !important;
+    font-family: Helvetica, Arial, sans-serif;
   }
   * {
-    color: #000 !important;
+    color: #111827 !important;
     background: transparent !important;
     box-shadow: none !important;
-    border-color: #ccc !important;
-    --tw-ring-color: #ccc !important;
+    border-color: #e2e8f0 !important;
+    --tw-ring-color: #e2e8f0 !important;
+  }
+  /* Cabeçalho do espelho impresso: faixa + título */
+  .print-header {
+    border-bottom: 2px solid #2540a0 !important;
+    padding-bottom: 10px;
+    margin-bottom: 14px;
+  }
+  .print-header h1 {
+    color: #111827 !important;
+    font-size: 20pt !important;
+    font-weight: 700;
+    margin: 0 0 4pt 0;
+  }
+  .print-header .print-meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2pt 20pt;
+    font-size: 9pt;
+    color: #475569 !important;
+    margin-top: 6pt;
+  }
+  .print-header .print-meta b {
+    color: #475569 !important;
+    font-weight: 600;
+    margin-right: 4pt;
+  }
+  /* Tabela do espelho */
+  table.print-timesheet {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8.5pt;
+    margin-bottom: 14pt;
+  }
+  table.print-timesheet thead tr {
+    background: #2540a0 !important;
+  }
+  table.print-timesheet thead th {
+    color: #ffffff !important;
+    background: #2540a0 !important;
+    padding: 6pt;
+    text-align: left;
+    font-weight: 600;
+    font-size: 8.5pt;
+    border: none !important;
+  }
+  table.print-timesheet tbody td {
+    padding: 5pt 6pt;
+    border-bottom: 0.5pt solid #e2e8f0 !important;
+    vertical-align: middle;
+  }
+  table.print-timesheet tbody tr.weekend {
+    background: #f0f5fa !important;
+  }
+  table.print-timesheet tbody tr:nth-child(even):not(.weekend) {
+    background: #f8fafc !important;
+  }
+  table.print-timesheet tbody tr {
+    page-break-inside: avoid;
+  }
+  table.print-timesheet .num {
+    font-variant-numeric: tabular-nums;
+  }
+  /* Resumo em caixa azul clara */
+  .print-summary {
+    background: #e8ecfa !important;
+    padding: 10pt 14pt;
+    border-radius: 4pt;
+    margin-top: 10pt;
+    page-break-inside: avoid;
+  }
+  .print-summary h2 {
+    color: #2540a0 !important;
+    font-size: 10pt;
+    font-weight: 700;
+    margin: 0 0 6pt 0;
+  }
+  .print-summary dl {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr auto;
+    gap: 3pt 14pt;
+    font-size: 9pt;
+    margin: 0;
+  }
+  .print-summary dt {
+    color: #64748b !important;
+  }
+  .print-summary dd {
+    color: #111827 !important;
+    font-weight: 700;
+    margin: 0;
+    text-align: right;
+  }
+  /* Assinaturas */
+  .print-signatures {
+    margin-top: 40pt;
+    display: grid;
+    grid-template-columns: 1fr 40pt 1fr;
+    page-break-inside: avoid;
+  }
+  .print-signatures div {
+    border-top: 0.5pt solid #64748b !important;
+    padding-top: 4pt;
+    font-size: 8.5pt;
+    color: #64748b !important;
+  }
+  /* Esconde tudo que não é para impressão */
+  .print\:hidden {
+    display: none !important;
+  }
+  .print\:block {
+    display: block !important;
+  }
+  .print\:table {
+    display: table !important;
   }
 }
 

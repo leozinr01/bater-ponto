@@ -8,10 +8,10 @@ import { useToast } from '../components/toast';
 import { cn, PageHeader } from '../components/ui';
 import { errorMessage } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { exportTable, type ExportFormat } from '../lib/export';
-import { currentMonth, formatDate, monthRange } from '../lib/format';
+import { type ExportFormat, exportTable } from '../lib/export';
+import { currentMonth, monthRange } from '../lib/format';
 import { useTimesheet } from '../lib/queries';
-import { fileSlug, timesheetSection } from '../lib/timesheet-export';
+import { buildTimesheetExport } from '../lib/timesheet-export';
 import type { Timesheet } from '../lib/types';
 import { DaysView } from './records/DaysView';
 import { PunchesView } from './records/PunchesView';
@@ -20,12 +20,7 @@ type Tab = 'dias' | 'marcacoes';
 
 /** Espelho de ponto do mês em PDF ou CSV: uma linha por dia e o resumo no fim. */
 function exportTimesheet(format: ExportFormat, sheet: Timesheet, from: string, to: string) {
-  return exportTable(format, {
-    filename: `espelho-ponto_${fileSlug(sheet.employee.name)}_${from.slice(0, 7)}`,
-    title: `Espelho de ponto · ${sheet.employee.name}`,
-    subtitle: `${formatDate(from)} a ${formatDate(to)} · fuso ${sheet.timezone}`,
-    sections: [timesheetSection(sheet)],
-  });
+  return exportTable(format, buildTimesheetExport(sheet, from, to));
 }
 
 /**
