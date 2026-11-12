@@ -150,6 +150,46 @@ export class EmployeesService {
       .catch(rethrowEmailConflict);
   }
 
+  /**
+   * Exclusão definitiva só para cadastro sem nenhum registro (ex.: criado por engano).
+   * Quem já tem marcações, abonos ou ajustes é desativado: o ponto precisa ser guardado.
+   */
+  async remove(actorId: string, id: string) {
+    if (actorId === id) {
+      throw new BadRequestException(
+        'Você não pode excluir a sua própria conta',
+      );
+    }
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: {
+        _count: {
+          select: {
+            punchClocks: true,
+            createdPunches: true,
+            voidedPunches: true,
+            absences: true,
+            createdAbsences: true,
+            canceledAbsences: true,
+            hourBankEntries: true,
+            createdHourBankEntries: true,
+            canceledHourBankEntries: true,
+          },
+        },
+      },
+    });
+    if (!user) throw new NotFoundException('Funcionário não encontrado');
+    if (Object.values(user._count).some((n) => n > 0)) {
+      throw new ConflictException(
+        'Este funcionário já tem registros de ponto, abonos ou ajustes, que precisam ser guardados. Desative o acesso em vez de excluir.',
+      );
+    }
+    await this.prisma.$transaction([
+      this.prisma.scheduleHistory.deleteMany({ where: { userId: id } }),
+      this.prisma.user.delete({ where: { id } }),
+    ]);
+  }
+
   async resetPassword(id: string, password: string) {
     await this.findById(id);
     await this.prisma.user.update({

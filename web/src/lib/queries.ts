@@ -192,6 +192,14 @@ export function useSetEmployeeActive() {
   });
 }
 
+export function useDeleteEmployee() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api<void>(`/employees/${id}`, { method: 'DELETE' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['employees'] }),
+  });
+}
+
 export function useResetPassword() {
   return useMutation({
     mutationFn: ({ id, password }: { id: string; password: string }) =>

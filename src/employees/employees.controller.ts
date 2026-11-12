@@ -2,6 +2,7 @@ import { AuthUser, CurrentUser, Roles } from '@/auth/decorators';
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Param,
@@ -67,7 +68,7 @@ export class EmployeesController {
   @ApiOperation({
     summary: 'Atualiza dados, papel, jornada ou status',
     description:
-      'Funcionários não são excluídos: use active=false para desativar o acesso.',
+      'Para quem já tem registros, use active=false para desativar o acesso.',
   })
   @ApiOkResponse({ type: EmployeeResponseDto })
   update(
@@ -76,6 +77,23 @@ export class EmployeesController {
     @Body() dto: UpdateEmployeeDto,
   ) {
     return this.employeesService.update(actor.id, id, dto);
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  @ApiOperation({
+    summary: 'Exclui um funcionário sem nenhum registro',
+    description:
+      'Recusada (409) se houver marcações, abonos ou ajustes de banco de horas: nesse caso, desative o acesso.',
+  })
+  @ApiNoContentResponse()
+  @ApiNotFoundResponse()
+  @ApiConflictResponse({ description: 'Funcionário com registros' })
+  remove(
+    @CurrentUser() actor: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.employeesService.remove(actor.id, id);
   }
 
   @Post(':id/password')

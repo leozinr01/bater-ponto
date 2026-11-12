@@ -1,4 +1,4 @@
-import { CalendarDays, KeyRound, Pencil, Power, Search, UserPlus, Users } from 'lucide-react';
+import { CalendarDays, KeyRound, Pencil, Power, Search, Trash2, UserPlus, Users } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useToast } from '../../components/toast';
@@ -20,10 +20,11 @@ import {
   Select,
   table,
 } from '../../components/ui';
-import { errorMessage } from '../../lib/api';
+import { ApiError, errorMessage } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { formatDate, formatDuration } from '../../lib/format';
 import {
+  useDeleteEmployee,
   useEmployees,
   useResetPassword,
   useSaveEmployee,
@@ -206,6 +207,70 @@ function ResetPasswordModal({ employee, onClose }: { employee: Employee; onClose
   );
 }
 
+function DeleteEmployeeModal({ employee, onClose }: { employee: Employee; onClose: () => void }) {
+  const toast = useToast();
+  const remove = useDeleteEmployee();
+  const setActive = useSetEmployeeActive();
+  // 409: tem registros; a saída é desativar, oferecida ali mesmo
+  const hasRecords = remove.error instanceof ApiError && remove.error.status === 409;
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      icon={Trash2}
+      title={`Excluir ${employee.name}?`}
+      description="A exclusão é definitiva e só é permitida para quem não tem nenhum registro de ponto, abono ou ajuste."
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Cancelar
+          </Button>
+          {hasRecords && employee.active ? (
+            <Button
+              variant="danger"
+              icon={Power}
+              loading={setActive.isPending}
+              onClick={() =>
+                setActive.mutate(
+                  { id: employee.id, active: false },
+                  {
+                    onSuccess: () => {
+                      toast(`${employee.name} desativado(a).`);
+                      onClose();
+                    },
+                    onError: (err) => toast(errorMessage(err), 'error'),
+                  },
+                )
+              }
+            >
+              Desativar acesso
+            </Button>
+          ) : (
+            <Button
+              variant="danger"
+              loading={remove.isPending}
+              disabled={hasRecords}
+              onClick={() =>
+                remove.mutate(employee.id, {
+                  onSuccess: () => {
+                    toast(`${employee.name} excluído(a).`);
+                    onClose();
+                  },
+                })
+              }
+            >
+              Excluir
+            </Button>
+          )}
+        </>
+      }
+    >
+      {remove.isError ? <Alert>{errorMessage(remove.error)}</Alert> : null}
+    </Modal>
+  );
+}
+
 /** Botão só de ícone, com dica ao passar o mouse. */
 function IconAction({
   label,
@@ -252,6 +317,7 @@ export function EmployeesPage() {
   const setActive = useSetEmployeeActive();
   const [editing, setEditing] = useState<Employee | 'new' | null>(null);
   const [resetting, setResetting] = useState<Employee | null>(null);
+  const [deleting, setDeleting] = useState<Employee | null>(null);
 
   useEffect(() => {
     const id = setTimeout(() => setFilters((f) => ({ ...f, search: search.trim() || undefined, page: 1 })), 300);
@@ -283,7 +349,7 @@ export function EmployeesPage() {
       <PageHeader
         icon={Users}
         title="Funcionários"
-        description="Ninguém é excluído: desative o acesso e os registros são mantidos."
+        description="Quem já tem registros é desativado, não excluído: o ponto fica guardado."
         actions={
           <Button icon={UserPlus} onClick={() => setEditing('new')}>
             Novo funcionário
@@ -424,6 +490,9 @@ export function EmployeesPage() {
                                 disabled={setActive.isPending && setActive.variables?.id === e.id}
                               />
                             )}
+                            {!isSelf && (
+                              <IconAction label="Excluir" icon={Trash2} danger onClick={() => setDeleting(e)} />
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -446,6 +515,7 @@ export function EmployeesPage() {
         <EmployeeFormModal employee={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />
       )}
       {resetting && <ResetPasswordModal employee={resetting} onClose={() => setResetting(null)} />}
+      {deleting && <DeleteEmployeeModal employee={deleting} onClose={() => setDeleting(null)} />}
     </>
   );
 }

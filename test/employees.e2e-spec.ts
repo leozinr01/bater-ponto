@@ -26,6 +26,7 @@ describe('Funcionários e jornadas (e2e)', () => {
       () => ctx.http().post('/api/employees').send({}),
       () => ctx.http().get(`/api/employees/${id}`),
       () => ctx.http().patch(`/api/employees/${id}`).send({ role: 'ADMIN' }),
+      () => ctx.http().delete(`/api/employees/${id}`),
       () =>
         ctx
           .http()
@@ -284,6 +285,52 @@ describe('Funcionários e jornadas (e2e)', () => {
       .post('/api/auth/login')
       .send({ email: employee.email, password: 'senha-redefinida-1' });
     expect(login.status).toBe(200);
+  });
+
+  it('exclui funcionário sem registros; quem tem marcações só pode ser desativado', async () => {
+    const created = await ctx.http().post('/api/employees').set(asAdmin).send({
+      name: 'Cadastro por engano',
+      email: 'engano@teste.com',
+      password: 'senha-inicial-1',
+    });
+    await ctx
+      .http()
+      .delete(`/api/employees/${created.body.id}`)
+      .set(asAdmin)
+      .expect(204);
+    expect(
+      await ctx.prisma.user.count({ where: { id: created.body.id } }),
+    ).toBe(0);
+    expect(
+      await ctx.prisma.scheduleHistory.count({
+        where: { userId: created.body.id },
+      }),
+    ).toBe(0);
+    expect(
+      (
+        await ctx
+          .http()
+          .delete(`/api/employees/${created.body.id}`)
+          .set(asAdmin)
+      ).status,
+    ).toBe(404);
+
+    const withPunch = await createUser(ctx);
+    await ctx.prisma.punchClock.create({ data: { userId: withPunch.id } });
+    const blocked = await ctx
+      .http()
+      .delete(`/api/employees/${withPunch.id}`)
+      .set(asAdmin);
+    expect(blocked.status).toBe(409);
+    expect(
+      await ctx.prisma.punchClock.count({ where: { userId: withPunch.id } }),
+    ).toBe(1);
+
+    const self = await ctx
+      .http()
+      .delete(`/api/employees/${admin.id}`)
+      .set(asAdmin);
+    expect(self.status).toBe(400);
   });
 
   it('remove jornada sem funcionários; recusa a que está em uso e preserva o histórico', async () => {
