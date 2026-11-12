@@ -1,6 +1,7 @@
 import {
   AlarmClock,
   ArrowRight,
+  CalendarPlus,
   Coffee,
   HeartPulse,
   LayoutDashboard,
@@ -14,8 +15,10 @@ import {
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Alert, Avatar, Badge, Button, Card, cn, EmptyState, Loading, PageHeader, type Icon } from '../../components/ui';
+import { AddPunchModal } from '../../components/corrections';
 import { absenceLabels } from '../../components/timesheet';
 import { errorMessage } from '../../lib/api';
+import { useAuth } from '../../lib/auth';
 import { useServerNow } from '../../lib/clock';
 import { formatDate, formatMinutes, timeOf, WEEKDAYS } from '../../lib/format';
 import { useToday } from '../../lib/queries';
@@ -82,7 +85,23 @@ function StatButton({
   );
 }
 
-function EmployeeRow({ item, now }: { item: TodayEmployee; now: number }) {
+/** Horário atual (HH:mm) no fuso da empresa. */
+function timeIn(now: number, timeZone: string) {
+  return new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(
+    now,
+  );
+}
+
+function EmployeeRow({
+  item,
+  now,
+  onPunch,
+}: {
+  item: TodayEmployee;
+  now: number;
+  /** Ausente na linha do próprio admin: ele não lança as próprias marcações. */
+  onPunch?: () => void;
+}) {
   const { label, tone } = presence[item.status];
   const worked = liveMinutes(item, now);
   const progress = item.expectedMinutes ? Math.min(100, (worked / item.expectedMinutes) * 100) : null;
@@ -137,6 +156,20 @@ function EmployeeRow({ item, now }: { item: TodayEmployee; now: number }) {
         )}
       </p>
 
+      {onPunch && (
+        <Button
+          size="sm"
+          variant="secondary"
+          icon={CalendarPlus}
+          onClick={onPunch}
+          title="Lança uma batida para quem esqueceu de bater o ponto"
+          aria-label={`Registrar batida de ${item.employee.name}`}
+          className="order-last w-full sm:order-none sm:w-auto"
+        >
+          Registrar batida
+        </Button>
+      )}
+
       <div className="flex basis-36 items-center gap-3">
         <div className="flex-1">
           <p className="text-sm font-bold text-white tabular-nums">
@@ -174,6 +207,8 @@ export function TodayPage() {
   // Avança a cada 30 s, para o tempo trabalhado correr na tela
   const now = useServerNow(30_000).getTime();
   const [filter, setFilter] = useState<PresenceStatus | null>(null);
+  const [punching, setPunching] = useState<{ item: TodayEmployee; time: string } | null>(null);
+  const { user } = useAuth();
   const data = today.data;
 
   const items = (data?.employees ?? [])
@@ -242,7 +277,16 @@ export function TodayPage() {
             ) : (
               <ul className="divide-y divide-white/[0.04]">
                 {items.map((item) => (
-                  <EmployeeRow key={item.employee.id} item={item} now={now} />
+                  <EmployeeRow
+                    key={item.employee.id}
+                    item={item}
+                    now={now}
+                    onPunch={
+                      item.employee.id === user?.id
+                        ? undefined
+                        : () => setPunching({ item, time: timeIn(now, data.timezone) })
+                    }
+                  />
                 ))}
               </ul>
             )}
@@ -250,9 +294,23 @@ export function TodayPage() {
           <p className="text-xs text-slate-500">
             Atrasado = dia de trabalho, passou do horário de entrada mais a tolerância e ainda não marcou. Em intervalo =
             saiu e ainda não cumpriu a carga do dia. Fora do local = marcação longe de todos os locais de trabalho (a
-            marcação vale normalmente). Atualiza sozinho a cada minuto.
+            marcação vale normalmente). Atualiza sozinho a cada minuto. O botão de calendário registra uma batida por
+            quem esqueceu, com justificativa.
           </p>
         </div>
+      )}
+
+      {punching && data && (
+        <AddPunchModal
+          key={punching.item.employee.id}
+          open
+          onClose={() => setPunching(null)}
+          employeeId={punching.item.employee.id}
+          employeeName={punching.item.employee.name}
+          defaultDate={data.date}
+          defaultTime={punching.time}
+          timezone={data.timezone}
+        />
       )}
     </>
   );

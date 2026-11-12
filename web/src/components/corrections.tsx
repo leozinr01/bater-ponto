@@ -60,6 +60,7 @@ export function AddPunchModal({
   employeeId,
   employeeName,
   defaultDate,
+  defaultTime = '',
   timezone,
 }: {
   open: boolean;
@@ -67,12 +68,13 @@ export function AddPunchModal({
   employeeId: string;
   employeeName: string;
   defaultDate: string;
+  defaultTime?: string;
   timezone: string;
 }) {
   const toast = useToast();
   const manual = useManualPunch();
   const [date, setDate] = useState(defaultDate);
-  const [time, setTime] = useState('');
+  const [time, setTime] = useState(defaultTime);
   const [reason, setReason] = useState('');
 
   const onSubmit = (e: FormEvent) => {
