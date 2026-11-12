@@ -139,7 +139,7 @@ function EmployeeFormModal({ employee, onClose }: { employee: Employee | null; o
               <option value="">Sem jornada</option>
               {schedules.data?.data.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.name} ({formatDuration(s.dailyMinutes)}, entrada {s.startTime})
+                  {s.name} ({formatDuration(s.weeklyMinutes)} semanais, entrada {s.startTime})
                 </option>
               ))}
             </Select>
@@ -446,7 +446,7 @@ export function EmployeesPage() {
                             <div>
                               <p className="text-slate-200">{s.name}</p>
                               <p className="text-xs text-slate-500">
-                                {formatDuration(s.dailyMinutes)} · {s.startTime}
+                                {formatDuration(s.weeklyMinutes)}/semana · {s.startTime}
                               </p>
                             </div>
                           ) : e.workScheduleId ? (

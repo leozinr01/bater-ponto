@@ -9,7 +9,7 @@ export type ScheduleValues = Pick<
   WorkSchedule,
   | 'id'
   | 'startTime'
-  | 'dailyMinutes'
+  | 'weeklyMinutes'
   | 'workDays'
   | 'lateToleranceMinutes'
   | 'overtimeToleranceMinutes'
@@ -18,7 +18,7 @@ export type ScheduleValues = Pick<
 const snapshot = (schedule: ScheduleValues) => ({
   workScheduleId: schedule?.id ?? null,
   startTime: schedule?.startTime ?? null,
-  dailyMinutes: schedule?.dailyMinutes ?? null,
+  weeklyMinutes: schedule?.weeklyMinutes ?? null,
   workDays: schedule?.workDays ?? [],
   lateToleranceMinutes: schedule?.lateToleranceMinutes ?? null,
   overtimeToleranceMinutes: schedule?.overtimeToleranceMinutes ?? null,
@@ -59,10 +59,10 @@ export function baselineRow(userId: string, schedule: ScheduleValues) {
 }
 
 function toScheduleInput(row: ScheduleHistory): ScheduleInput | null {
-  if (row.startTime === null || row.dailyMinutes === null) return null;
+  if (row.startTime === null || row.weeklyMinutes === null) return null;
   return {
     startTime: row.startTime,
-    dailyMinutes: row.dailyMinutes,
+    weeklyMinutes: row.weeklyMinutes,
     workDays: row.workDays,
     lateToleranceMinutes: row.lateToleranceMinutes ?? 0,
     overtimeToleranceMinutes: row.overtimeToleranceMinutes ?? 0,

@@ -359,7 +359,7 @@ describe('Ponto (e2e)', () => {
         .send({
           name: 'Comercial',
           startTime: '08:00',
-          dailyMinutes: 480,
+          weeklyMinutes: 2400,
           workDays: [1, 2, 3, 4, 5],
           lateToleranceMinutes: 10,
           overtimeToleranceMinutes: 10,
@@ -421,17 +421,18 @@ describe('Ponto (e2e)', () => {
         overtimeMinutes: 0,
         deficitMinutes: 0,
       });
+      // Carga semanal: dia de trabalho não tem saldo próprio, ele sai no fechamento da semana
       expect(dayOf(res.body, '2026-10-06')).toMatchObject({
         status: 'complete',
         workedMinutes: 540,
         lateMinutes: 30,
-        overtimeMinutes: 60,
+        overtimeMinutes: 0,
       });
       expect(dayOf(res.body, '2026-10-07')).toMatchObject({
         status: 'complete',
         workedMinutes: 420,
         breakMinutes: 60,
-        deficitMinutes: 60,
+        deficitMinutes: 0,
       });
       expect(dayOf(res.body, '2026-10-07').periods.at(-1).end).toBe(
         '2026-10-08T06:00:00-03:00',
@@ -440,21 +441,29 @@ describe('Ponto (e2e)', () => {
         status: 'absent',
         workedMinutes: 0,
       });
+      // sexta fecha a semana, mas está incompleta: o saldo fica pendente; a falta de quinta sai do previsto
       expect(dayOf(res.body, '2026-10-09')).toMatchObject({
         status: 'incomplete',
         workedMinutes: 240,
         overtimeMinutes: null,
         deficitMinutes: null,
+        week: {
+          from: '2026-10-05',
+          to: '2026-10-11',
+          expectedMinutes: 1920,
+          workedMinutes: 1680,
+          pending: true,
+        },
       });
 
       expect(res.body.totals).toEqual({
         workedMinutes: 1680,
         expectedMinutes: 2400,
         lateMinutes: 30,
-        overtimeMinutes: 60,
-        overtime50Minutes: 60,
+        overtimeMinutes: 0,
+        overtime50Minutes: 0,
         overtime100Minutes: 0,
-        deficitMinutes: 60,
+        deficitMinutes: 0,
         compensatedMinutes: 0,
         incompleteDays: 1,
         absentDays: 1,
@@ -514,10 +523,13 @@ describe('Ponto (e2e)', () => {
       });
 
       const sheet = await timesheet();
+      // semana fechada: 1920 trabalhadas de 1920 previstas
       expect(dayOf(sheet.body, '2026-10-09')).toMatchObject({
         status: 'complete',
         workedMinutes: 480,
         overtimeMinutes: 0,
+        deficitMinutes: 0,
+        week: { expectedMinutes: 1920, workedMinutes: 1920, pending: false },
       });
       expect(sheet.body.totals.incompleteDays).toBe(0);
     });
@@ -564,12 +576,17 @@ describe('Ponto (e2e)', () => {
         .set(authHeader(ctx, employee));
       expect(onlyValid.body.data.map((p) => p.id)).not.toContain(original.id);
 
-      // e o cálculo usa apenas a marcação válida: 3h30 + 4h = 7h30
+      // e o cálculo usa apenas a marcação válida: 3h30 + 4h = 7h30.
+      // Semana: 8h + 7h30 + 7h (qua noturna) + 8h = 30h30 de 32h previstas → 1h30 de falta
       const sheet = await timesheet();
       expect(dayOf(sheet.body, '2026-10-06')).toMatchObject({
         workedMinutes: 450,
         overtimeMinutes: 0,
-        deficitMinutes: 30,
+        deficitMinutes: 0,
+      });
+      expect(dayOf(sheet.body, '2026-10-09')).toMatchObject({
+        overtimeMinutes: 0,
+        deficitMinutes: 90,
       });
 
       const again = await ctx
@@ -700,22 +717,20 @@ describe('Ponto (e2e)', () => {
         .http()
         .patch(`/api/work-schedules/${scheduleId}`)
         .set(asAdmin)
-        .send({ dailyMinutes: 420, lateToleranceMinutes: 30 })
+        .send({ weeklyMinutes: 2100, lateToleranceMinutes: 30 })
         .expect(200);
 
-      // O passado continua com a jornada da época: ter (7h30 após a correção) com 8h previstas
+      // O passado continua com a jornada da época: ter com 8h previstas e o atraso de 30 min
       const sheet = await timesheet();
       expect(dayOf(sheet.body, '2026-10-06')).toMatchObject({
         expectedMinutes: 480,
-        overtimeMinutes: 0,
-        deficitMinutes: 30,
         lateMinutes: 30,
       });
       expect(
-        (await history()).map((h) => [h.effectiveFrom, h.dailyMinutes]),
+        (await history()).map((h) => [h.effectiveFrom, h.weeklyMinutes]),
       ).toEqual([
-        ['1970-01-01', 480],
-        [today, 420],
+        ['1970-01-01', 2400],
+        [today, 2100],
       ]);
 
       // Simula que a mudança vale desde a terça: só os dias a partir dela mudam
@@ -727,17 +742,19 @@ describe('Ponto (e2e)', () => {
       expect(dayOf(changed.body, '2026-10-05')).toMatchObject({
         expectedMinutes: 480,
       });
-      // ter: 7h30 com jornada de 7h → 30 min extra; atraso de 30 min agora dentro da tolerância
+      // ter em diante: 7h por dia (35h semanais); atraso de 30 min agora dentro da tolerância
       expect(dayOf(changed.body, '2026-10-06')).toMatchObject({
         expectedMinutes: 420,
-        overtimeMinutes: 30,
-        deficitMinutes: 0,
         lateMinutes: 0,
       });
-      // qua: 7h noturnas = jornada cheia
       expect(dayOf(changed.body, '2026-10-07')).toMatchObject({
-        overtimeMinutes: 0,
-        deficitMinutes: 0,
+        expectedMinutes: 420,
+      });
+      // a semana soma a parte de cada dia pela jornada da época (seg 8h + ter, qua e sex 7h);
+      // segunda está incompleta, então o saldo segue pendente
+      expect(dayOf(changed.body, '2026-10-09').week).toMatchObject({
+        expectedMinutes: 480 + 3 * 420,
+        pending: true,
       });
 
       // Tirar a jornada também vale só daí em diante

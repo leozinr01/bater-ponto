@@ -9,7 +9,7 @@ import { alertLabels, Balance, DayAlerts, DayStatusBadge } from '../../component
 import { Alert, Badge, Button, Card, cn, EmptyState, Loading, Segmented } from '../../components/ui';
 import { errorMessage } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
-import { formatDate, formatMinutes, monthRange, timeOf, today, WEEKDAYS } from '../../lib/format';
+import { addDays, formatDate, formatMinutes, monthRange, timeOf, today, WEEKDAYS } from '../../lib/format';
 import { useHourBank, useTimesheet } from '../../lib/queries';
 import type { Timesheet, TimesheetDay } from '../../lib/types';
 
@@ -36,6 +36,44 @@ function groupByWeek(days: TimesheetDay[]) {
 }
 
 const isOff = (d: TimesheetDay) => !d.scheduled && !d.holiday && !d.absence && d.punches.length === 0;
+
+/** Resumo no cabeçalho da semana: trabalhado × previsto e o saldo, ou "em andamento". */
+function WeekSummary({ days, todayDate }: { days: TimesheetDay[]; todayDate: string }) {
+  const close = days.find((d) => d.week)?.week;
+  if (!close) {
+    if (!days.some((d) => d.scheduled || d.status === 'absent')) return null;
+    const sunday = addDays(days[0].date, (7 - days[0].weekday) % 7);
+    if (sunday < todayDate) {
+      // Semana que termina no mês seguinte: o saldo sai no espelho de lá
+      return <span className="text-slate-500 normal-case">Saldo no espelho do mês seguinte</span>;
+    }
+    const worked = days.filter((d) => d.scheduled).reduce((sum, d) => sum + d.workedMinutes, 0);
+    return (
+      <span className="text-slate-500 normal-case">
+        Em andamento · <span className="tabular-nums">{formatMinutes(worked)}</span> trabalhadas
+      </span>
+    );
+  }
+  const balance = close.workedMinutes - close.expectedMinutes;
+  return (
+    <span className="text-slate-400 normal-case tabular-nums">
+      {formatMinutes(close.workedMinutes)} de {formatMinutes(close.expectedMinutes)}
+      {close.pending ? (
+        <span className="ml-2 text-amber-300">saldo pendente</span>
+      ) : (
+        <span
+          className={cn(
+            'ml-2 font-semibold',
+            balance > 0 ? 'text-emerald-300' : balance < 0 ? 'text-red-300' : 'text-slate-300',
+          )}
+        >
+          {balance > 0 ? '+' : ''}
+          {formatMinutes(balance)}
+        </span>
+      )}
+    </span>
+  );
+}
 
 function SummaryItem({ label, value, hint }: { label: string; value: ReactNode; hint?: string }) {
   return (
@@ -140,7 +178,8 @@ function DayRow({
           {day.punches.length ? formatMinutes(day.workedMinutes) : <span className="text-slate-600">–</span>}
         </p>
         {Boolean(day.overtimeMinutes || day.deficitMinutes) && (
-          <p className="text-xs font-medium tabular-nums">
+          <p className="text-xs font-medium tabular-nums" title={day.week ? 'Saldo da semana inteira' : undefined}>
+            {day.week && <span className="mr-1 font-normal text-slate-500">semana</span>}
             <Balance overtime={day.overtimeMinutes} deficit={day.deficitMinutes} />
           </p>
         )}
@@ -212,6 +251,8 @@ function PrintTable({ days }: { days: TimesheetDay[] }) {
               <td className="num">{balance(d)}</td>
               <td>
                 {statusText(d)}
+                {d.week &&
+                  ` · Fechamento da semana: ${formatMinutes(d.week.workedMinutes)} de ${formatMinutes(d.week.expectedMinutes)}`}
                 {d.alerts.length > 0 && ` · ${d.alerts.map((a) => alertLabels[a].label).join(', ')}`}
               </td>
             </tr>
@@ -387,9 +428,12 @@ export function DaysView({ employeeId, month }: { employeeId: string; month: str
           <div className="space-y-4">
             {weeks.map(({ all, visible }) => (
               <Card key={all[0].date} className="overflow-hidden">
-                <p className="border-b border-white/[0.06] px-4 py-2.5 text-xs font-medium tracking-wide text-slate-400 uppercase sm:px-5">
-                  {weekLabel(all[0].date, all[all.length - 1].date)}
-                </p>
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-white/[0.06] px-4 py-2.5 text-xs font-medium sm:px-5">
+                  <span className="tracking-wide text-slate-400 uppercase">
+                    {weekLabel(all[0].date, all[all.length - 1].date)}
+                  </span>
+                  <WeekSummary days={all} todayDate={todayDate} />
+                </div>
                 <ul className="divide-y divide-white/[0.04]">
                   {visible.map((day) => (
                     <DayRow

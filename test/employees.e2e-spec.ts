@@ -61,7 +61,7 @@ describe('Funcionários e jornadas (e2e)', () => {
       .send({
         name: 'Comercial',
         startTime: '08:00',
-        dailyMinutes: 480,
+        weeklyMinutes: 2400,
         workDays: [5, 1, 2, 3, 4],
         lateToleranceMinutes: 10,
         overtimeToleranceMinutes: 10,
@@ -147,7 +147,7 @@ describe('Funcionários e jornadas (e2e)', () => {
       .send({
         name: 'X',
         startTime: '25:00',
-        dailyMinutes: 0,
+        weeklyMinutes: 0,
         workDays: [1, 1, 9],
         lateToleranceMinutes: 10,
         overtimeToleranceMinutes: 10,
@@ -156,7 +156,7 @@ describe('Funcionários e jornadas (e2e)', () => {
     expect(badSchedule.body.message).toEqual(
       expect.arrayContaining([
         'startTime deve estar no formato HH:mm (ex: 08:00)',
-        'dailyMinutes deve ser maior que zero',
+        'weeklyMinutes deve ser maior que zero',
         'workDays não pode ter dias repetidos',
         'workDays deve conter inteiros de 0 a 6',
       ]),
@@ -336,7 +336,7 @@ describe('Funcionários e jornadas (e2e)', () => {
   it('remove jornada sem funcionários; recusa a que está em uso e preserva o histórico', async () => {
     const body = {
       startTime: '08:00',
-      dailyMinutes: 480,
+      weeklyMinutes: 2400,
       workDays: [1, 2, 3, 4, 5],
       lateToleranceMinutes: 10,
       overtimeToleranceMinutes: 10,
@@ -382,7 +382,7 @@ describe('Funcionários e jornadas (e2e)', () => {
     expect(history[0]).toMatchObject({
       workScheduleId: null,
       startTime: '08:00',
-      dailyMinutes: 480,
+      weeklyMinutes: 2400,
     });
 
     const missing = await ctx

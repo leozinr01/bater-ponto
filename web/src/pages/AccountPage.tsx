@@ -109,8 +109,8 @@ export function AccountPage() {
                       <p className="font-semibold text-white">{schedule.name}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-slate-500">Carga diária</p>
-                      <p className="font-semibold text-white">{formatDuration(schedule.dailyMinutes)}</p>
+                      <p className="text-xs text-slate-500">Carga semanal</p>
+                      <p className="font-semibold text-white">{formatDuration(schedule.weeklyMinutes)}</p>
                     </div>
                     <div>
                       <p className="text-xs text-slate-500">Entrada</p>

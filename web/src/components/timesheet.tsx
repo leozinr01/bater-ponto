@@ -69,7 +69,10 @@ export const alertLabels: Record<DayAlert, { label: string; detail: string }> = 
     label: 'Intervalo curto',
     detail: 'Intervalo abaixo do mínimo: 1h para jornada acima de 6h, 15 min acima de 4h (CLT art. 71)',
   },
-  overtime_limit: { label: '+2h extras', detail: 'Mais de 2 horas extras no dia (CLT art. 59)' },
+  overtime_limit: {
+    label: 'Acima do limite',
+    detail: 'Mais de 10h num dia de trabalho ou mais de 2h numa folga (CLT art. 59)',
+  },
   short_rest: { label: 'Descanso < 11h', detail: 'Menos de 11h de descanso desde a jornada anterior (CLT art. 66)' },
 };
 

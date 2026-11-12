@@ -33,13 +33,14 @@ export class CreateWorkScheduleDto {
   startTime: string;
 
   @ApiProperty({
-    example: 480,
-    description: 'Minutos de trabalho esperados por dia de trabalho (480 = 8h)',
+    example: 2640,
+    description:
+      'Carga horária semanal em minutos (2640 = 44h). O saldo fecha por semana.',
   })
-  @IsInt({ message: 'dailyMinutes deve ser um número inteiro de minutos' })
-  @Min(1, { message: 'dailyMinutes deve ser maior que zero' })
-  @Max(1440, { message: 'dailyMinutes deve ser no máximo 1440' })
-  dailyMinutes: number;
+  @IsInt({ message: 'weeklyMinutes deve ser um número inteiro de minutos' })
+  @Min(1, { message: 'weeklyMinutes deve ser maior que zero' })
+  @Max(7 * 1440, { message: 'weeklyMinutes deve ser no máximo 168 horas' })
+  weeklyMinutes: number;
 
   @ApiProperty({
     example: [1, 2, 3, 4, 5],
@@ -67,7 +68,7 @@ export class CreateWorkScheduleDto {
   @ApiProperty({
     example: 10,
     description:
-      'Diferença diária (extra ou falta) até este limite não é computada',
+      'Diferença semanal (extra ou falta) até este limite não é computada',
   })
   @IsInt({ message: 'overtimeToleranceMinutes deve ser um inteiro' })
   @Min(0)

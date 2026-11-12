@@ -85,8 +85,8 @@ model WorkSchedule {
   name                     String
   /// Horário previsto de início da jornada (HH:mm, no fuso APP_TIMEZONE).
   startTime                String @map("start_time")
-  /// Minutos de trabalho esperados por dia de trabalho.
-  dailyMinutes             Int    @map("daily_minutes")
+  /// Carga horária semanal em minutos: o saldo (extra ou falta) fecha por semana.
+  weeklyMinutes            Int    @map("weekly_minutes")
   /// Dias de trabalho: 0 = domingo ... 6 = sábado.
   workDays                 Int[]  @map("work_days")
   /// Atrasos até este limite não são computados.
@@ -114,7 +114,7 @@ model ScheduleHistory {
   workScheduleId String? @map("work_schedule_id")
 
   startTime                String? @map("start_time")
-  dailyMinutes             Int?    @map("daily_minutes")
+  weeklyMinutes            Int?    @map("weekly_minutes")
   workDays                 Int[]   @map("work_days")
   lateToleranceMinutes     Int?    @map("late_tolerance_minutes")
   overtimeToleranceMinutes Int?    @map("overtime_tolerance_minutes")

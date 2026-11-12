@@ -32,7 +32,7 @@ describe('Feriados, abonos, painel do dia e alertas (e2e)', () => {
       .send({
         name: 'Comercial',
         startTime: '08:00',
-        dailyMinutes: 480,
+        weeklyMinutes: 2400,
         workDays: [1, 2, 3, 4, 5],
         lateToleranceMinutes: 10,
         overtimeToleranceMinutes: 10,
@@ -362,10 +362,10 @@ describe('Feriados, abonos, painel do dia e alertas (e2e)', () => {
 
   describe('banco de horas', () => {
     it('acumula extras, falta de horas, folgas de banco e ajustes', async () => {
-      // Jornada só de segunda: os outros dias não pesam no saldo
+      // Jornada só de segunda (8h semanais): cada semana fecha na própria segunda
       const employee = await createEmployee(
         'Banco',
-        await createSchedule({ workDays: [1] }),
+        await createSchedule({ workDays: [1], weeklyMinutes: 480 }),
       );
       const asEmployee = authHeader(ctx, employee);
       await ctx.prisma.punchClock.createMany({

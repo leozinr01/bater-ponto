@@ -181,7 +181,7 @@ Regras do cálculo ([src/punches/timesheet.ts](src/punches/timesheet.ts)):
 - **Horas trabalhadas:** soma de **todos** os pares entrada/saída. Intervalos são os espaços entre os pares. Marcações valem com precisão de minuto.
 - **Dia incompleto** (número ímpar de marcações): **nenhum horário é inventado**. Contam só os pares completos, o dia aparece como `incomplete` e extra/falta fica `null` até a correção. Se a jornada aberta é recente, o status é `in_progress`.
 - **Atraso:** primeira marcação comparada ao `startTime` da jornada. Até `lateToleranceMinutes` não é computado; acima disso conta o atraso inteiro.
-- **Hora extra / falta de horas:** trabalhado − `dailyMinutes`. Diferenças até `overtimeToleranceMinutes` são zeradas. Em dia que não é de trabalho, tudo é hora extra.
+- **Hora extra / falta de horas (carga semanal):** a jornada tem `weeklyMinutes`; cada dia de trabalho prevê a sua parte (`weeklyMinutes / workDays`). O saldo dos dias de trabalho fecha por semana (segunda a domingo): trabalhado − previsto da semana, lançado no último dia de trabalho dela (campo `week`), depois que ele passou. Feriados, abonos e faltas tiram a parte do dia do previsto. Diferenças até `overtimeToleranceMinutes` são zeradas. Em dia que não é de trabalho, tudo é hora extra, no próprio dia.
 - **Falta (`absent`):** dia de trabalho passado sem marcações, a partir da data de cadastro. É contada em `absentDays`, separada da falta de horas.
 - **Sem jornada configurada:** horas trabalhadas são calculadas; atraso, extra e falta ficam `null`.
 - Período máximo por consulta: 93 dias.

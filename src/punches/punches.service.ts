@@ -39,6 +39,7 @@ import {
   PunchInput,
   ScheduleSegment,
   TimesheetDay,
+  weekStart,
 } from './timesheet';
 
 /**
@@ -311,9 +312,17 @@ export class PunchesService {
     if (!employee) throw new NotFoundException('Funcionário não encontrado');
 
     const [punches, holidays, absences, history] = await Promise.all([
-      this.validPunchesByEmployee([employeeId], query.from, query.to),
-      this.holidays.byDate(query.from, query.to),
-      this.absences.byEmployeeAndDate([employeeId], query.from, query.to),
+      this.validPunchesByEmployee(
+        [employeeId],
+        weekStart(query.from),
+        query.to,
+      ),
+      this.holidays.byDate(weekStart(query.from), query.to),
+      this.absences.byEmployeeAndDate(
+        [employeeId],
+        weekStart(query.from),
+        query.to,
+      ),
       loadScheduleHistory(this.prisma, [employeeId]),
     ]);
     return this.buildEmployeeTimesheet(
@@ -345,9 +354,9 @@ export class PunchesService {
 
     const ids = employees.map((e) => e.id);
     const [punches, holidays, absences, history] = await Promise.all([
-      this.validPunchesByEmployee(ids, query.from, query.to),
-      this.holidays.byDate(query.from, query.to),
-      this.absences.byEmployeeAndDate(ids, query.from, query.to),
+      this.validPunchesByEmployee(ids, weekStart(query.from), query.to),
+      this.holidays.byDate(weekStart(query.from), query.to),
+      this.absences.byEmployeeAndDate(ids, weekStart(query.from), query.to),
       loadScheduleHistory(this.prisma, ids),
     ]);
 
@@ -378,9 +387,9 @@ export class PunchesService {
   ): Promise<Map<string, TimesheetDay[]>> {
     const ids = employees.map((e) => e.id);
     const [punches, holidays, absences, history] = await Promise.all([
-      this.validPunchesByEmployee(ids, from, to),
-      this.holidays.byDate(from, to),
-      this.absences.byEmployeeAndDate(ids, from, to),
+      this.validPunchesByEmployee(ids, weekStart(from), to),
+      this.holidays.byDate(weekStart(from), to),
+      this.absences.byEmployeeAndDate(ids, weekStart(from), to),
       loadScheduleHistory(this.prisma, ids),
     ]);
     const now = new Date();

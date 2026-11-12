@@ -9,12 +9,22 @@ const p = (local: string) => ({
   timestamp: new Date(`${local}:00-03:00`),
 });
 
+// 40h semanais de segunda a sexta (8h por dia)
 const schedule: ScheduleInput = {
   startTime: '08:00',
-  dailyMinutes: 480,
+  weeklyMinutes: 2400,
   workDays: [1, 2, 3, 4, 5],
   lateToleranceMinutes: 10,
   overtimeToleranceMinutes: 10,
+};
+
+// Semana de 2026-10-19 (segunda) a 2026-10-25 (domingo)
+const WEEK = {
+  mon: '2026-10-19',
+  tue: '2026-10-20',
+  wed: '2026-10-21',
+  thu: '2026-10-22',
+  fri: '2026-10-23',
 };
 
 const build = (
@@ -31,6 +41,21 @@ const build = (
     employeeSince: '2026-01-01',
     ...opts,
   });
+
+/** Um período contínuo no dia, das `start` às `end`. */
+const span = (date: string, start: string, end: string) => [
+  p(`${date}T${start}`),
+  p(`${date}T${end}`),
+];
+
+/** Semana inteira (seg a sex) de 8h, com 1h de almoço. */
+const fullWeek = () =>
+  Object.values(WEEK).flatMap((d) => [
+    ...span(d, '08:00', '12:00'),
+    ...span(d, '13:00', '17:00'),
+  ]);
+
+const week = { from: WEEK.mon, to: WEEK.fri };
 
 describe('buildTimesheet', () => {
   it('soma todos os pares de marcações do dia, não só a primeira entrada e a última saída', () => {
@@ -53,6 +78,7 @@ describe('buildTimesheet', () => {
       lateMinutes: 0,
       overtimeMinutes: 0,
       deficitMinutes: 0,
+      week: null,
     });
     expect(days[0].periods).toHaveLength(3);
   });
@@ -68,7 +94,7 @@ describe('buildTimesheet', () => {
   });
 
   it('conta a jornada que atravessa a meia-noite inteira no dia em que começou', () => {
-    const night = { ...schedule, startTime: '22:00', dailyMinutes: 420 };
+    const night = { ...schedule, startTime: '22:00', weeklyMinutes: 2100 };
     const { days, totals } = build(
       [
         p('2026-10-19T22:00'),
@@ -85,7 +111,7 @@ describe('buildTimesheet', () => {
       workedMinutes: 7 * 60,
       breakMinutes: 60,
       lateMinutes: 0,
-      overtimeMinutes: 0,
+      expectedMinutes: 420,
     });
     // terça não teve início de jornada: é falta, sem horas atribuídas
     const tuesday = days.find((d) => d.date === '2026-10-20')!;
@@ -135,7 +161,6 @@ describe('buildTimesheet', () => {
       date: '2026-10-20',
       status: 'complete',
       workedMinutes: 540,
-      overtimeMinutes: 60,
     });
   });
 
@@ -180,47 +205,175 @@ describe('buildTimesheet', () => {
     });
   });
 
-  describe('horas extras e faltas', () => {
-    it('calcula horas extras acima da jornada', () => {
-      const { days } = build([
-        p('2026-10-19T08:00'),
-        p('2026-10-19T12:00'),
-        p('2026-10-19T13:00'),
-        p('2026-10-19T19:30'),
+  describe('carga semanal', () => {
+    it('sair mais cedo num dia e mais tarde no outro não gera saldo', () => {
+      const { days, totals } = build(
+        [
+          ...span(WEEK.mon, '08:00', '15:00'), // 7h
+          ...span(WEEK.tue, '08:00', '17:00'), // 9h
+          ...span(WEEK.wed, '08:00', '12:00'), // 4h
+          ...span(WEEK.thu, '08:00', '20:00'), // 12h
+          ...span(WEEK.fri, '08:00', '16:00'), // 8h
+        ],
+        week,
+      );
+      expect(days.map((d) => d.deficitMinutes)).toEqual([0, 0, 0, 0, 0]);
+      expect(days.map((d) => d.overtimeMinutes)).toEqual([0, 0, 0, 0, 0]);
+      expect(days.at(-1)!.week).toEqual({
+        from: WEEK.mon,
+        to: '2026-10-25',
+        expectedMinutes: 2400,
+        workedMinutes: 2400,
+        pending: false,
+      });
+      expect(totals).toMatchObject({ overtimeMinutes: 0, deficitMinutes: 0 });
+    });
+
+    it('20h semanais em 5 dias: cada dia prevê 4h, e o saldo é da semana', () => {
+      const partTime = { ...schedule, weeklyMinutes: 1200 };
+      const { days } = build(
+        [
+          ...span(WEEK.mon, '08:00', '12:00'), // 4h
+          ...span(WEEK.tue, '08:00', '11:00'), // 3h
+          ...span(WEEK.wed, '08:00', '13:00'), // 5h
+          ...span(WEEK.thu, '08:00', '12:00'), // 4h
+          ...span(WEEK.fri, '08:00', '12:30'), // 4h30
+        ],
+        { ...week, schedule: partTime },
+      );
+      expect(days.map((d) => d.expectedMinutes)).toEqual([
+        240, 240, 240, 240, 240,
       ]);
-      expect(days[0]).toMatchObject({
+      expect(days.at(-1)).toMatchObject({
+        overtimeMinutes: 30,
+        deficitMinutes: 0,
+        overtimeRate: 50,
+      });
+    });
+
+    it('lança a extra da semana no último dia de trabalho, com 50%', () => {
+      const { days, totals } = build(
+        [...fullWeek(), ...span(WEEK.mon, '17:00', '19:30')],
+        week,
+      );
+      expect(days[0].overtimeMinutes).toBe(0);
+      expect(days.at(-1)).toMatchObject({
+        date: WEEK.fri,
         overtimeMinutes: 150,
+        deficitMinutes: 0,
+        overtimeRate: 50,
+      });
+      expect(totals).toMatchObject({
+        overtimeMinutes: 150,
+        overtime50Minutes: 150,
         deficitMinutes: 0,
       });
     });
 
-    it('calcula horas faltantes abaixo da jornada', () => {
-      const { days } = build([p('2026-10-19T08:00'), p('2026-10-19T14:00')]);
-      expect(days[0]).toMatchObject({
+    it('lança a falta de horas da semana no último dia de trabalho', () => {
+      const punches = fullWeek().filter(
+        (x) =>
+          x.timestamp.getTime() !==
+          new Date(`${WEEK.wed}T17:00:00-03:00`).getTime(),
+      );
+      punches.push(p(`${WEEK.wed}T15:00`));
+      const { days } = build(punches, week);
+      expect(days.at(-1)).toMatchObject({
         overtimeMinutes: 0,
         deficitMinutes: 120,
       });
     });
 
-    it('ignora diferenças dentro da tolerância e respeita a configuração', () => {
-      const punches = [p('2026-10-19T08:00'), p('2026-10-19T16:08')];
-      expect(build(punches).days[0].overtimeMinutes).toBe(0);
+    it('ignora diferença da semana dentro da tolerância e respeita a configuração', () => {
+      const punches = [...fullWeek(), ...span(WEEK.fri, '17:30', '17:38')];
+      expect(build(punches, week).days.at(-1)!.overtimeMinutes).toBe(0);
       expect(
         build(punches, {
+          ...week,
           schedule: { ...schedule, overtimeToleranceMinutes: 5 },
-        }).days[0].overtimeMinutes,
+        }).days.at(-1)!.overtimeMinutes,
       ).toBe(8);
     });
 
-    it('a jornada diária configurada muda o resultado', () => {
-      const punches = [p('2026-10-19T08:00'), p('2026-10-19T16:00')];
-      const sixHours = { ...schedule, dailyMinutes: 360 };
-      expect(
-        build(punches, { schedule: sixHours }).days[0].overtimeMinutes,
-      ).toBe(120);
+    it('semana ainda em andamento não tem saldo', () => {
+      const { days, totals } = build(
+        [
+          ...span(WEEK.mon, '08:00', '18:00'),
+          ...span(WEEK.tue, '08:00', '18:00'),
+        ],
+        { ...week, now: new Date(`${WEEK.wed}T09:00:00-03:00`) },
+      );
+      expect(days.every((d) => d.week === null)).toBe(true);
+      expect(totals).toMatchObject({ overtimeMinutes: 0, deficitMinutes: 0 });
     });
 
-    it('trabalho em dia de folga é todo hora extra, sem atraso', () => {
+    it('dia incompleto deixa a semana pendente até a correção', () => {
+      const punches = fullWeek().filter(
+        (x) =>
+          x.timestamp.getTime() !==
+          new Date(`${WEEK.wed}T17:00:00-03:00`).getTime(),
+      );
+      const { days } = build(punches, week);
+      expect(days.at(-1)).toMatchObject({
+        overtimeMinutes: null,
+        deficitMinutes: null,
+      });
+      expect(days.at(-1)!.week).toMatchObject({ pending: true });
+    });
+
+    it('dia de falta sai do previsto da semana (já conta como falta)', () => {
+      const punches = fullWeek().filter(
+        (x) => !x.timestamp.toISOString().startsWith('2026-10-22'),
+      );
+      const { days, totals } = build(punches, week);
+      expect(days.find((d) => d.date === WEEK.thu)!.status).toBe('absent');
+      expect(days.at(-1)!.week).toMatchObject({
+        expectedMinutes: 1920,
+        workedMinutes: 1920,
+      });
+      expect(totals).toMatchObject({ absentDays: 1, deficitMinutes: 0 });
+    });
+
+    it('falta no último dia de trabalho ainda fecha a semana nele', () => {
+      const punches = fullWeek().filter(
+        (x) => !x.timestamp.toISOString().startsWith('2026-10-23'),
+      );
+      const { days } = build(punches, week);
+      expect(days.at(-1)).toMatchObject({
+        date: WEEK.fri,
+        status: 'absent',
+        overtimeMinutes: 0,
+        deficitMinutes: 0,
+      });
+      expect(days.at(-1)!.week).toMatchObject({ expectedMinutes: 1920 });
+    });
+
+    it('feriado na semana tira a parte do dia do previsto', () => {
+      const punches = fullWeek().filter(
+        (x) => !x.timestamp.toISOString().startsWith('2026-10-21'),
+      );
+      const { days, totals } = build(punches, {
+        ...week,
+        holidays: new Map([[WEEK.wed, 'Feriado municipal']]),
+      });
+      expect(days.at(-1)!.week).toMatchObject({ expectedMinutes: 1920 });
+      expect(totals).toMatchObject({
+        absentDays: 0,
+        overtimeMinutes: 0,
+        deficitMinutes: 0,
+      });
+    });
+
+    it('semana que começou antes do período fecha com os dias anteriores a ele', () => {
+      const { days } = build(
+        [...fullWeek(), ...span(WEEK.mon, '17:00', '18:00')],
+        { from: WEEK.wed, to: WEEK.fri },
+      );
+      expect(days.map((d) => d.date)).toEqual([WEEK.wed, WEEK.thu, WEEK.fri]);
+      expect(days.at(-1)).toMatchObject({ overtimeMinutes: 60 });
+    });
+
+    it('trabalho em dia de folga é todo hora extra, no próprio dia, sem atraso', () => {
       // 2026-10-18 é domingo
       const { days } = build([p('2026-10-18T10:00'), p('2026-10-18T14:00')], {
         from: '2026-10-18',
@@ -231,6 +384,7 @@ describe('buildTimesheet', () => {
         expectedMinutes: 0,
         lateMinutes: 0,
         overtimeMinutes: 240,
+        overtimeRate: 100,
       });
     });
 
@@ -273,26 +427,27 @@ describe('buildTimesheet', () => {
   it('totaliza o período', () => {
     const { totals } = build(
       [
-        p('2026-10-19T08:00'),
-        p('2026-10-19T17:00'), // 9h → 60 extra
-        p('2026-10-20T08:30'),
-        p('2026-10-20T15:30'), // 7h, 30 de atraso, 60 de falta
+        ...span(WEEK.mon, '08:00', '17:00'), // 9h
+        ...span(WEEK.tue, '08:30', '15:30'), // 7h, 30 de atraso
+        ...span(WEEK.wed, '08:00', '16:00'),
+        ...span(WEEK.thu, '08:00', '16:00'),
+        ...span(WEEK.fri, '08:00', '16:00'),
       ],
-      { from: '2026-10-19', to: '2026-10-20' },
+      week,
     );
     expect(totals).toEqual({
-      workedMinutes: 16 * 60,
-      expectedMinutes: 960,
+      workedMinutes: 2400,
+      expectedMinutes: 2400,
       lateMinutes: 30,
-      overtimeMinutes: 60,
-      overtime50Minutes: 60,
+      overtimeMinutes: 0,
+      overtime50Minutes: 0,
       overtime100Minutes: 0,
-      deficitMinutes: 60,
+      deficitMinutes: 0,
       incompleteDays: 0,
       absentDays: 0,
       compensatedMinutes: 0,
       excusedDays: 0,
-      alertDays: 2, // os dois dias passam de 6h sem intervalo
+      alertDays: 5, // todos passam de 6h sem intervalo
     });
   });
 });
@@ -415,14 +570,28 @@ describe('alertas da CLT', () => {
     expect(totals.alertDays).toBe(0);
   });
 
-  it('alerta mais de 2h extras no dia', () => {
+  it('alerta mais de 10h trabalhadas num dia de trabalho', () => {
     const { days } = build([
       p('2026-10-19T08:00'),
       p('2026-10-19T12:00'),
       p('2026-10-19T13:00'),
       p('2026-10-19T20:00'),
     ]);
-    expect(days[0].overtimeMinutes).toBe(180);
+    expect(days[0].workedMinutes).toBe(660);
+    expect(days[0].alerts).toEqual(['overtime_limit']);
+  });
+
+  it('alerta mais de 2h extras num dia de folga', () => {
+    const { days } = build(
+      [
+        p('2026-10-18T08:00'),
+        p('2026-10-18T12:00'),
+        p('2026-10-18T13:00'),
+        p('2026-10-18T14:00'),
+      ],
+      { from: '2026-10-18', to: '2026-10-18' },
+    );
+    expect(days[0].overtimeMinutes).toBe(300);
     expect(days[0].alerts).toEqual(['overtime_limit']);
   });
 
@@ -512,37 +681,48 @@ describe('histórico de jornada', () => {
   const partTime: ScheduleInput = {
     ...schedule,
     startTime: '13:00',
-    dailyMinutes: 240,
+    weeklyMinutes: 1200,
   };
   const history = [
     { from: '1970-01-01', schedule },
     { from: '2026-10-21', schedule: partTime },
   ];
-  const day = (date: string) => [
-    p(`${date}T08:00`),
-    p(`${date}T12:00`),
-    p(`${date}T13:00`),
-    p(`${date}T17:00`),
-  ];
 
   it('calcula cada dia com a jornada vigente naquela data', () => {
-    const { days } = build([...day('2026-10-20'), ...day('2026-10-21')], {
-      from: '2026-10-20',
-      to: '2026-10-21',
-      scheduleHistory: history,
-      schedule: partTime, // atual
-    });
-    expect(days[0]).toMatchObject({
-      expectedMinutes: 480,
-      overtimeMinutes: 0,
-      lateMinutes: 0,
-    });
+    const { days } = build(
+      [
+        ...span(WEEK.tue, '08:00', '12:00'),
+        ...span(WEEK.tue, '13:00', '17:00'),
+        ...span(WEEK.wed, '13:00', '17:00'),
+      ],
+      {
+        from: WEEK.tue,
+        to: WEEK.wed,
+        scheduleHistory: history,
+        schedule: partTime, // atual
+      },
+    );
+    expect(days[0]).toMatchObject({ expectedMinutes: 480, lateMinutes: 0 });
     // a partir de 21: 4h previstas e entrada às 13:00
-    expect(days[1]).toMatchObject({
-      expectedMinutes: 240,
-      overtimeMinutes: 240,
-      lateMinutes: 0,
+    expect(days[1]).toMatchObject({ expectedMinutes: 240, lateMinutes: 0 });
+  });
+
+  it('a semana da troca soma a parte de cada dia pela jornada da época', () => {
+    const { days } = build(
+      [
+        ...span(WEEK.mon, '08:00', '16:00'),
+        ...span(WEEK.tue, '08:00', '16:00'),
+        ...span(WEEK.wed, '13:00', '17:00'),
+        ...span(WEEK.thu, '13:00', '17:00'),
+        ...span(WEEK.fri, '13:00', '17:00'),
+      ],
+      { ...week, scheduleHistory: history, schedule: partTime },
+    );
+    expect(days.at(-1)!.week).toMatchObject({
+      expectedMinutes: 2 * 480 + 3 * 240,
+      workedMinutes: 2 * 480 + 3 * 240,
     });
+    expect(days.at(-1)!.overtimeMinutes).toBe(0);
   });
 
   it('dia sem jornada no histórico não gera falta', () => {
@@ -562,7 +742,7 @@ describe('histórico de jornada', () => {
 });
 
 describe('folga de banco', () => {
-  it('não gera falta e consome a carga do dia do banco de horas', () => {
+  it('não gera falta e consome a parte do dia do banco de horas', () => {
     const { days, totals } = build([], {
       absences: new Map([
         [

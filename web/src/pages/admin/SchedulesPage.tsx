@@ -15,8 +15,10 @@ function ScheduleFormModal({ schedule, onClose }: { schedule: WorkSchedule | nul
   const save = useSaveSchedule();
   const [name, setName] = useState(schedule?.name ?? '');
   const [startTime, setStartTime] = useState(schedule?.startTime ?? '08:00');
-  const [daily, setDaily] = useState(durationInput(schedule?.dailyMinutes ?? 480));
+  const [weekly, setWeekly] = useState(durationInput(schedule?.weeklyMinutes ?? 2400));
   const [workDays, setWorkDays] = useState<number[]>(schedule?.workDays ?? [1, 2, 3, 4, 5]);
+  const weeklyValid = /^\d{1,3}:[0-5]\d$/.test(weekly) && parseDuration(weekly) > 0;
+  const perDay = weeklyValid && workDays.length ? Math.round(parseDuration(weekly) / workDays.length) : null;
   const [lateTolerance, setLateTolerance] = useState(schedule?.lateToleranceMinutes ?? 10);
   const [overtimeTolerance, setOvertimeTolerance] = useState(schedule?.overtimeToleranceMinutes ?? 10);
 
@@ -30,7 +32,7 @@ function ScheduleFormModal({ schedule, onClose }: { schedule: WorkSchedule | nul
         id: schedule?.id,
         name: name.trim(),
         startTime,
-        dailyMinutes: parseDuration(daily),
+        weeklyMinutes: parseDuration(weekly),
         workDays,
         lateToleranceMinutes: lateTolerance,
         overtimeToleranceMinutes: overtimeTolerance,
@@ -50,7 +52,7 @@ function ScheduleFormModal({ schedule, onClose }: { schedule: WorkSchedule | nul
       onClose={onClose}
       icon={schedule ? Pencil : CalendarClock}
       title={schedule ? `Editar ${schedule.name}` : 'Nova jornada'}
-      description="Usada nos registros para calcular atrasos, horas extras e faltas."
+      description="O saldo fecha por semana: sair mais cedo num dia e mais tarde no outro não gera extra nem falta."
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
@@ -88,15 +90,18 @@ function ScheduleFormModal({ schedule, onClose }: { schedule: WorkSchedule | nul
               <Input id={id} type="time" required value={startTime} onChange={(e) => setStartTime(e.target.value)} />
             )}
           </Field>
-          <Field label="Carga diária" hint="Horas:minutos por dia.">
+          <Field
+            label="Carga semanal"
+            hint={perDay ? `Horas:minutos por semana (≈ ${formatDuration(perDay)} por dia).` : 'Horas:minutos por semana.'}
+          >
             {(id) => (
               <Input
                 id={id}
                 required
-                pattern="\d{1,2}:[0-5]\d"
-                placeholder="08:00"
-                value={daily}
-                onChange={(e) => setDaily(e.target.value)}
+                pattern="\d{1,3}:[0-5]\d"
+                placeholder="44:00"
+                value={weekly}
+                onChange={(e) => setWeekly(e.target.value)}
               />
             )}
           </Field>
@@ -137,7 +142,7 @@ function ScheduleFormModal({ schedule, onClose }: { schedule: WorkSchedule | nul
               />
             )}
           </Field>
-          <Field label="Tolerância de saldo" hint="Extra ou falta diária ignorada.">
+          <Field label="Tolerância de saldo" hint="Extra ou falta da semana ignorada.">
             {(id) => (
               <Input
                 id={id}
@@ -264,9 +269,12 @@ export function SchedulesPage() {
               </div>
 
               <div className="relative mt-5 flex items-baseline gap-2">
-                <span className="text-4xl font-bold tracking-tight text-white">{formatDuration(s.dailyMinutes)}</span>
-                <span className="text-sm text-slate-500">por dia</span>
+                <span className="text-4xl font-bold tracking-tight text-white">{formatDuration(s.weeklyMinutes)}</span>
+                <span className="text-sm text-slate-500">por semana</span>
               </div>
+              <p className="relative mt-1 text-xs text-slate-500">
+                ≈ {formatDuration(Math.round(s.weeklyMinutes / s.workDays.length))} por dia de trabalho
+              </p>
 
               <div className="relative mt-4 grid grid-cols-2 gap-2 text-sm">
                 <div className="flex items-center gap-2 rounded-xl bg-white/[0.03] px-3 py-2 ring-1 ring-white/[0.06]">
@@ -299,7 +307,7 @@ export function SchedulesPage() {
                 ))}
               </div>
               <p className="relative mt-4 text-xs text-slate-500">
-                Saldo diário de até {s.overtimeToleranceMinutes} min é ignorado.
+                Saldo da semana de até {s.overtimeToleranceMinutes} min é ignorado.
               </p>
             </Card>
           ))}

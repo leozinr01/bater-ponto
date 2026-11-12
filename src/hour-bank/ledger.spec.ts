@@ -4,10 +4,16 @@ import { runLedger } from './ledger';
 const day = (
   date: string,
   weekday: number,
-  values: { overtime?: number; deficit?: number; holiday?: string },
+  values: {
+    overtime?: number;
+    deficit?: number;
+    holiday?: string;
+    scheduled?: boolean;
+  },
 ) => ({
   date,
   weekday,
+  scheduled: values.scheduled ?? false,
   holiday: values.holiday ?? null,
   overtimeMinutes: values.overtime ?? 0,
   deficitMinutes: values.deficit ?? 0,
@@ -86,6 +92,19 @@ describe('runLedger', () => {
     );
     expect(balance).toBe(-60);
     expect(byMonth.get('2026-11')?.payroll100Minutes).toBe(180);
+  });
+
+  it('saldo da semana fechado num sábado de trabalho entra 1:1 no banco', () => {
+    const { balance, byMonth } = runLedger(
+      [day('2026-11-07', 6, { overtime: 60, scheduled: true })],
+      [],
+    );
+    expect(balance).toBe(60);
+    expect(byMonth.get('2026-11')).toMatchObject({
+      overtimeMinutes: 60,
+      payroll50Minutes: 0,
+      saturdayCreditMinutes: 0,
+    });
   });
 
   it('ajustes entram antes do dia e contam para o sábado', () => {

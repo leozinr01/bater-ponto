@@ -5,7 +5,7 @@ export const SATURDAY_BANK_FACTOR = 1.5;
 
 /**
  * Movimento do banco de horas num período.
- * Entram no saldo: horas extras de dias úteis (1:1), falta de horas, folgas de banco,
+ * Entram no saldo: o saldo das semanas e as extras de folga em dia útil (1:1), falta de horas, folgas de banco,
  * ajustes manuais e o crédito de sábado. Vão para a folha de pagamento (fora do saldo):
  * extras de sábado que sobraram depois de zerar o negativo (50%) e extras de domingo e feriado (100%).
  */
@@ -39,6 +39,7 @@ type LedgerDay = Pick<
   TimesheetDay,
   | 'date'
   | 'weekday'
+  | 'scheduled'
   | 'holiday'
   | 'overtimeMinutes'
   | 'deficitMinutes'
@@ -94,7 +95,11 @@ export function runLedger(days: LedgerDay[], adjustments: Adjustment[]) {
     m.compensatedMinutes += day.compensatedMinutes;
 
     if (overtime > 0) {
-      if (day.holiday || day.weekday === 0) {
+      // Dia de trabalho só tem extra no fechamento da semana: vai para o banco, como dia útil
+      if (day.scheduled) {
+        m.overtimeMinutes += overtime;
+        delta += overtime;
+      } else if (day.holiday || day.weekday === 0) {
         m.payroll100Minutes += overtime;
       } else if (day.weekday === 6) {
         const negative = Math.max(0, -(balance + delta));

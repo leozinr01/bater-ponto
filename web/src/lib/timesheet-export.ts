@@ -55,7 +55,13 @@ export function timesheetSection(sheet: Timesheet, title?: string): ExportSectio
         dash(d.deficitMinutes),
         dash(d.lateMinutes),
         signedBalance(d.overtimeMinutes, d.deficitMinutes),
-        [dayStatusLabel(d), d.absence?.reason, ...d.alerts.map((a) => alertLabels[a].label)]
+        [
+          dayStatusLabel(d),
+          d.absence?.reason,
+          d.week &&
+            `Semana: ${formatMinutes(d.week.workedMinutes)} de ${formatMinutes(d.week.expectedMinutes)}${d.week.pending ? ' (pendente)' : ''}`,
+          ...d.alerts.map((a) => alertLabels[a].label),
+        ]
           .filter(Boolean)
           .join(' · '),
       ];
@@ -73,7 +79,7 @@ export function timesheetSection(sheet: Timesheet, title?: string): ExportSectio
     summary: [
       ['Horas trabalhadas', formatMinutes(t.workedMinutes)],
       ['Horas previstas', formatMinutes(t.expectedMinutes)],
-      ['Hora extra 50% (sábado e úteis)', formatMinutes(t.overtime50Minutes)],
+      ['Hora extra 50% (semana e sábado)', formatMinutes(t.overtime50Minutes)],
       ['Hora extra 100% (domingo e feriado)', formatMinutes(t.overtime100Minutes)],
       ['Horas negativas', formatMinutes(t.deficitMinutes)],
       ['Atrasos', formatMinutes(t.lateMinutes)],

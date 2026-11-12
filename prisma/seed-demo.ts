@@ -192,7 +192,7 @@ async function main() {
       data: {
         name: 'Comercial 8h (demo)',
         startTime: '08:00',
-        dailyMinutes: 480,
+        weeklyMinutes: 2400,
         workDays: [1, 2, 3, 4, 5],
         lateToleranceMinutes: 10,
         overtimeToleranceMinutes: 10,
@@ -202,7 +202,7 @@ async function main() {
       data: {
         name: 'Meio período 6h (demo)',
         startTime: '13:00',
-        dailyMinutes: 360,
+        weeklyMinutes: 1800,
         workDays: [1, 2, 3, 4, 5],
         lateToleranceMinutes: 10,
         overtimeToleranceMinutes: 10,

@@ -25,7 +25,8 @@ export interface WorkSchedule {
   id: string;
   name: string;
   startTime: string;
-  dailyMinutes: number;
+  /** Carga semanal: o saldo (extra ou falta) fecha por semana. */
+  weeklyMinutes: number;
   workDays: number[];
   lateToleranceMinutes: number;
   overtimeToleranceMinutes: number;
@@ -103,7 +104,7 @@ export interface QueuedPunch {
 
 export type DayStatus = 'complete' | 'incomplete' | 'in_progress' | 'absent';
 
-/** Alertas da CLT: intervalo curto (art. 71), mais de 2h extras (art. 59), descanso < 11h (art. 66). */
+/** Alertas da CLT: intervalo curto (art. 71), mais de 10h num dia de trabalho ou 2h numa folga (art. 59), descanso < 11h (art. 66). */
 export type DayAlert = 'short_break' | 'overtime_limit' | 'short_rest';
 
 /** MEDICAL = atestado; VACATION = férias; LEAVE = afastamento; ALLOWANCE = abono. */
@@ -127,14 +128,28 @@ export interface TimesheetDay {
   periods: { start: string; end: string | null; minutes: number }[];
   workedMinutes: number;
   breakMinutes: number;
+  /** Parte do dia na carga semanal. */
   expectedMinutes: number | null;
   lateMinutes: number | null;
+  /** Em dia de trabalho, só o que fecha a semana tem saldo (o da semana inteira, em `week`). */
   overtimeMinutes: number | null;
   /** Adicional da hora extra: 100% em domingos e feriados, 50% nos demais dias. */
   overtimeRate: 50 | 100;
   deficitMinutes: number | null;
   compensatedMinutes: number;
+  /** Fechamento da semana, presente no último dia de trabalho dela. */
+  week: WeekClose | null;
   alerts: DayAlert[];
+}
+
+export interface WeekClose {
+  /** Segunda e domingo da semana. */
+  from: string;
+  to: string;
+  expectedMinutes: number;
+  workedMinutes: number;
+  /** Dia incompleto na semana: saldo só depois da correção. */
+  pending: boolean;
 }
 
 export interface TimesheetTotals {

@@ -306,10 +306,30 @@ class TimesheetDayDto {
   @ApiProperty({ description: 'Carga consumida do banco por folga de banco' })
   compensatedMinutes: number;
   @ApiProperty({
+    nullable: true,
+    type: Object,
+    example: {
+      from: '2026-10-19',
+      to: '2026-10-25',
+      expectedMinutes: 1200,
+      workedMinutes: 1230,
+      pending: false,
+    },
+    description:
+      'Fechamento da semana, no último dia de trabalho dela: o extra/falta deste dia é o da semana inteira',
+  })
+  week: {
+    from: string;
+    to: string;
+    expectedMinutes: number;
+    workedMinutes: number;
+    pending: boolean;
+  } | null;
+  @ApiProperty({
     enum: ['short_break', 'overtime_limit', 'short_rest'],
     isArray: true,
     description:
-      'Alertas da CLT: intervalo abaixo do mínimo (art. 71), mais de 2h extras (art. 59), menos de 11h de descanso (art. 66)',
+      'Alertas da CLT: intervalo abaixo do mínimo (art. 71), mais de 10h num dia de trabalho ou 2h numa folga (art. 59), menos de 11h de descanso (art. 66)',
   })
   alerts: string[];
 }

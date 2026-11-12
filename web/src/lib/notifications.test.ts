@@ -9,7 +9,7 @@ const schedule = {
   id: 's1',
   name: 'Comercial',
   startTime: '08:00',
-  dailyMinutes: 480,
+  weeklyMinutes: 2400,
   workDays: [1, 2, 3, 4, 5],
   lateToleranceMinutes: 10,
   overtimeToleranceMinutes: 10,
@@ -33,6 +33,7 @@ const day = (values: Partial<TimesheetDay> & { date: string }): TimesheetDay => 
   overtimeRate: 50,
   deficitMinutes: 0,
   compensatedMinutes: 0,
+  week: null,
   alerts: [],
   ...values,
 });

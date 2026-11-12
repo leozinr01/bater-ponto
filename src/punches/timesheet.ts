@@ -16,18 +16,27 @@ import { addDays, localDate, weekday, zonedInstant } from '@/common/time';
  *   calculado até que a marcação faltante seja corrigida.
  * - Cada dia usa a jornada vigente naquela data (histórico): mudar a jornada não altera
  *   o cálculo dos dias anteriores.
- * - Feriado ou abono (atestado, férias, afastamento) num dia de trabalho: não há horas
- *   previstas nem falta; o que for trabalhado conta como extra.
+ * - A jornada tem carga SEMANAL. Cada dia de trabalho prevê a sua parte (carga ÷ dias
+ *   de trabalho), mas o saldo dos dias de trabalho fecha por semana (segunda a domingo):
+ *   trabalhado nesses dias − previsto da semana, lançado como extra ou falta no último
+ *   dia de trabalho da semana, depois que ele passou. Assim sair mais cedo num dia e
+ *   mais tarde no outro não gera saldo.
+ * - Dia de falta (sem marcação) não entra no previsto da semana: já conta como falta.
+ * - Feriado ou abono (atestado, férias, afastamento) num dia de trabalho: tira a parte
+ *   do dia do previsto da semana, sem falta; o que for trabalhado nele conta como extra.
+ * - Dia que não é de trabalho (ex.: sábado e domingo de escala): tudo é extra, no dia.
  * - Folga de banco (abono COMPENSATION) num dia de trabalho: também não gera falta, mas
- *   consome do banco de horas a carga prevista do dia (compensatedMinutes).
+ *   consome do banco de horas a parte do dia (compensatedMinutes).
  * - Alertas (CLT) só são avaliados em jornadas completas: intervalo intrajornada
- *   menor que o mínimo (art. 71), mais de 2h extras no dia (art. 59) e menos de 11h
- *   de descanso desde a jornada anterior (art. 66).
+ *   menor que o mínimo (art. 71), mais de 10h num dia de trabalho ou mais de 2h num dia
+ *   de folga (art. 59) e menos de 11h de descanso desde a jornada anterior (art. 66).
  */
 
 export const MAX_WORK_PERIOD_MINUTES = 14 * 60;
 export const MAX_BREAK_MINUTES = 6 * 60;
 export const MAX_DAILY_OVERTIME_MINUTES = 2 * 60;
+/** Limite de um dia de trabalho na compensação semanal (CLT art. 59, §2º). */
+export const MAX_WORKDAY_MINUTES = 10 * 60;
 export const MIN_REST_BETWEEN_SHIFTS_MINUTES = 11 * 60;
 
 export interface PunchInput {
@@ -41,11 +50,17 @@ export interface PunchInput {
 
 export interface ScheduleInput {
   startTime: string;
-  dailyMinutes: number;
+  /** Carga semanal; a parte de cada dia de trabalho é weeklyMinutes / workDays.length. */
+  weeklyMinutes: number;
   workDays: number[];
   lateToleranceMinutes: number;
+  /** Diferença semanal (extra ou falta) até este limite é ignorada. */
   overtimeToleranceMinutes: number;
 }
+
+/** Parte da carga semanal que cabe a um dia de trabalho (sem arredondar). */
+export const dailyShare = (schedule: ScheduleInput) =>
+  schedule.weeklyMinutes / schedule.workDays.length;
 
 /** Jornada vigente a partir de uma data (null = sem jornada). */
 export interface ScheduleSegment {
@@ -90,6 +105,19 @@ export interface DayAbsence {
   reason: string;
 }
 
+/** Fechamento da semana, no último dia de trabalho dela. */
+export interface WeekClose {
+  /** Segunda e domingo da semana. */
+  from: string;
+  to: string;
+  /** Previsto da semana: carga menos feriados, abonos e faltas. */
+  expectedMinutes: number;
+  /** Trabalhado nos dias de trabalho da semana. */
+  workedMinutes: number;
+  /** Há dia incompleto na semana: o saldo só sai depois da correção. */
+  pending: boolean;
+}
+
 export interface TimesheetDay {
   date: string;
   weekday: number;
@@ -104,15 +132,21 @@ export interface TimesheetDay {
   periods: WorkPeriod[];
   workedMinutes: number;
   breakMinutes: number;
-  /** null quando o funcionário não tem jornada configurada. */
+  /** Parte do dia na carga semanal; null quando o funcionário não tem jornada configurada. */
   expectedMinutes: number | null;
   lateMinutes: number | null;
+  /**
+   * Num dia de trabalho, só o último da semana tem saldo: o da semana inteira (`week`).
+   * Nos demais dias de trabalho é 0. Em dia de folga, feriado ou abono, é o trabalhado.
+   */
   overtimeMinutes: number | null;
   /** Adicional da hora extra do dia: 100% em domingos e feriados, 50% nos demais. */
   overtimeRate: OvertimeRate;
   deficitMinutes: number | null;
   /** Carga do dia consumida do banco de horas por folga de banco. */
   compensatedMinutes: number;
+  /** Presente no dia que fecha a semana. */
+  week: WeekClose | null;
   alerts: DayAlert[];
 }
 
@@ -134,6 +168,14 @@ export interface TimesheetTotals {
   alertDays: number;
 }
 
+/** Segunda-feira da semana da data. */
+export const weekStart = (date: string) =>
+  addDays(date, -((weekday(date) + 6) % 7));
+
+/**
+ * Marcações, feriados e abonos devem cobrir desde weekStart(from): o fechamento de uma
+ * semana que começou antes do período precisa dos dias anteriores a ele.
+ */
 export interface BuildTimesheetInput {
   punches: PunchInput[];
   /** Jornada atual: usada quando não há histórico. */
@@ -231,16 +273,20 @@ function isWorkDay(schedule: ScheduleInput | null, date: string) {
 }
 
 function dayAlerts(
-  day: Pick<TimesheetDay, 'workedMinutes' | 'breakMinutes' | 'overtimeMinutes'>,
+  day: Pick<
+    TimesheetDay,
+    'workedMinutes' | 'breakMinutes' | 'overtimeMinutes' | 'scheduled'
+  >,
   restBeforeMinutes: number | null,
 ): DayAlert[] {
   const alerts: DayAlert[] = [];
   const minBreak =
     day.workedMinutes > 6 * 60 ? 60 : day.workedMinutes > 4 * 60 ? 15 : 0;
   if (day.breakMinutes < minBreak) alerts.push('short_break');
-  if ((day.overtimeMinutes ?? 0) > MAX_DAILY_OVERTIME_MINUTES) {
-    alerts.push('overtime_limit');
-  }
+  const overLimit = day.scheduled
+    ? day.workedMinutes > MAX_WORKDAY_MINUTES
+    : (day.overtimeMinutes ?? 0) > MAX_DAILY_OVERTIME_MINUTES;
+  if (overLimit) alerts.push('overtime_limit');
   if (
     restBeforeMinutes !== null &&
     restBeforeMinutes < MIN_REST_BETWEEN_SHIFTS_MINUTES
@@ -260,7 +306,7 @@ function compensatedMinutes(
   return absence?.type === 'COMPENSATION' &&
     !holiday &&
     isWorkDay(schedule, date)
-    ? schedule!.dailyMinutes
+    ? Math.round(dailyShare(schedule!))
     : 0;
 }
 
@@ -277,7 +323,7 @@ function buildDay(
   const scheduled = isWorkDay(schedule, date) && !holiday && !absence;
   const expectedMinutes = schedule
     ? scheduled
-      ? schedule.dailyMinutes
+      ? Math.round(dailyShare(schedule))
       : 0
     : null;
 
@@ -309,13 +355,14 @@ function buildDay(
     lateMinutes = raw > schedule.lateToleranceMinutes ? raw : 0;
   }
 
+  // Dia de trabalho: o saldo sai no fechamento da semana. Fora dele, tudo é extra.
   let overtimeMinutes: number | null = null;
   let deficitMinutes: number | null = null;
-  if (schedule && expectedMinutes !== null && status === 'complete') {
-    const balance = workedMinutes - expectedMinutes;
-    const relevant = Math.abs(balance) > schedule.overtimeToleranceMinutes;
-    overtimeMinutes = relevant ? Math.max(0, balance) : 0;
-    deficitMinutes = relevant ? Math.max(0, -balance) : 0;
+  if (schedule && status === 'complete') {
+    const extra =
+      !scheduled && workedMinutes > schedule.overtimeToleranceMinutes;
+    overtimeMinutes = extra ? workedMinutes : 0;
+    deficitMinutes = 0;
   }
 
   return {
@@ -335,10 +382,11 @@ function buildDay(
     overtimeRate: overtimeRateOf(date, holiday),
     deficitMinutes,
     compensatedMinutes: compensatedMinutes(schedule, date, holiday, absence),
+    week: null,
     alerts:
       status === 'complete'
         ? dayAlerts(
-            { workedMinutes, breakMinutes, overtimeMinutes },
+            { workedMinutes, breakMinutes, overtimeMinutes, scheduled },
             restBeforeMinutes,
           )
         : [],
@@ -348,6 +396,77 @@ function buildDay(
 function sumOrNull(values: (number | null)[]): number | null {
   const present = values.filter((v): v is number => v !== null);
   return present.length ? present.reduce((a, b) => a + b, 0) : null;
+}
+
+/**
+ * Lança o saldo de cada semana no último dia de trabalho dela, depois que ele passou.
+ * Previsto: a parte de cada dia de trabalho (desde o cadastro) que não é feriado, abono
+ * nem falta. Trabalhado: o que foi feito nesses dias.
+ */
+function closeWeeks(
+  days: TimesheetDay[],
+  input: BuildTimesheetInput,
+  today: string,
+) {
+  const byDate = new Map(days.map((d) => [d.date, d]));
+  const first = days[0]?.date;
+  const last = days.at(-1)?.date;
+  if (!first || !last) return;
+
+  for (
+    let monday = weekStart(first);
+    monday <= last;
+    monday = addDays(monday, 7)
+  ) {
+    let expected = 0;
+    let worked = 0;
+    let pending = false;
+    let close: string | null = null;
+
+    for (let i = 0; i < 7; i++) {
+      const date = addDays(monday, i);
+      const schedule = scheduleAt(input, date);
+      if (
+        !isWorkDay(schedule, date) ||
+        input.holidays?.has(date) ||
+        input.absences?.has(date) ||
+        date < input.employeeSince
+      ) {
+        continue;
+      }
+      close = date;
+      const day = byDate.get(date);
+      if (day?.status === 'absent') continue;
+      expected += dailyShare(schedule!);
+      worked += day?.workedMinutes ?? 0;
+      if (day?.status === 'incomplete' || day?.status === 'in_progress') {
+        pending = true;
+      }
+    }
+
+    const day = close && close < today ? byDate.get(close) : undefined;
+    if (!day) continue;
+
+    const expectedMinutes = Math.round(expected);
+    day.week = {
+      from: monday,
+      to: addDays(monday, 6),
+      expectedMinutes,
+      workedMinutes: worked,
+      pending,
+    };
+    if (pending) {
+      day.overtimeMinutes = null;
+      day.deficitMinutes = null;
+      continue;
+    }
+    const balance = worked - expectedMinutes;
+    const relevant =
+      Math.abs(balance) > scheduleAt(input, close!)!.overtimeToleranceMinutes;
+    day.overtimeMinutes = relevant ? Math.max(0, balance) : 0;
+    day.deficitMinutes = relevant ? Math.max(0, -balance) : 0;
+    day.overtimeRate = 50;
+  }
 }
 
 export function buildTimesheet(input: BuildTimesheetInput): {
@@ -373,11 +492,12 @@ export function buildTimesheet(input: BuildTimesheetInput): {
     previous = shift;
   }
 
-  const days: TimesheetDay[] = [];
-  for (let date = from; date <= to; date = addDays(date, 1)) {
+  // Calcula desde a segunda da primeira semana: o fechamento dela usa dias anteriores a `from`
+  const all: TimesheetDay[] = [];
+  for (let date = weekStart(from); date <= to; date = addDays(date, 1)) {
     const shifts = shiftsByDate.get(date);
     if (shifts) {
-      days.push(
+      all.push(
         buildDay(
           date,
           shifts,
@@ -395,7 +515,7 @@ export function buildTimesheet(input: BuildTimesheetInput): {
     const absence = input.absences?.get(date) ?? null;
     const workDay = isWorkDay(schedule, date);
     if ((holiday || absence) && workDay) {
-      days.push({
+      all.push({
         date,
         weekday: weekday(date),
         scheduled: false,
@@ -417,10 +537,11 @@ export function buildTimesheet(input: BuildTimesheetInput): {
           holiday,
           absence,
         ),
+        week: null,
         alerts: [],
       });
     } else if (workDay && date >= employeeSince && date < today) {
-      days.push({
+      all.push({
         date,
         weekday: weekday(date),
         scheduled: true,
@@ -431,16 +552,20 @@ export function buildTimesheet(input: BuildTimesheetInput): {
         periods: [],
         workedMinutes: 0,
         breakMinutes: 0,
-        expectedMinutes: schedule!.dailyMinutes,
+        expectedMinutes: Math.round(dailyShare(schedule!)),
         lateMinutes: null,
         overtimeMinutes: null,
         overtimeRate: overtimeRateOf(date, holiday),
         deficitMinutes: null,
         compensatedMinutes: 0,
+        week: null,
         alerts: [],
       });
     }
   }
+
+  closeWeeks(all, input, today);
+  const days = all.filter((d) => d.date >= from);
 
   return {
     days,
