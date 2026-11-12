@@ -6,7 +6,11 @@ import {
 import { localDate } from '@/common/time';
 import { PrismaService } from '@/infra/database/prisma.service';
 import { EnvService } from '@/infra/env/env.service';
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   CreateWorkScheduleDto,
   UpdateWorkScheduleDto,
@@ -70,5 +74,25 @@ export class WorkSchedulesService {
       }
       return after;
     });
+  }
+
+  /**
+   * Só remove jornada sem funcionários: o banco apagaria a jornada deles sem passar
+   * pelo histórico. Os dias já calculados não mudam, pois o histórico guarda uma cópia dos valores.
+   */
+  async remove(id: string) {
+    await this.findById(id);
+    const users = await this.prisma.user.findMany({
+      where: { workScheduleId: id },
+      select: { name: true },
+      orderBy: { name: 'asc' },
+    });
+    if (users.length > 0) {
+      const names = users.map((u) => u.name).join(', ');
+      throw new ConflictException(
+        `Esta jornada está em uso por ${users.length === 1 ? '1 funcionário' : `${users.length} funcionários`} (${names}). Troque a jornada deles antes de remover.`,
+      );
+    }
+    await this.prisma.workSchedule.delete({ where: { id } });
   }
 }

@@ -34,6 +34,7 @@ describe('Funcionários e jornadas (e2e)', () => {
       () => ctx.http().get('/api/work-schedules'),
       () => ctx.http().post('/api/work-schedules').send({}),
       () => ctx.http().patch(`/api/work-schedules/${id}`).send({}),
+      () => ctx.http().delete(`/api/work-schedules/${id}`),
       () => ctx.http().get('/api/punches/report?from=2026-10-01&to=2026-10-31'),
       () => ctx.http().post('/api/punches/manual').send({}),
       () => ctx.http().post(`/api/punches/${id}/void`).send({}),
@@ -283,6 +284,65 @@ describe('Funcionários e jornadas (e2e)', () => {
       .post('/api/auth/login')
       .send({ email: employee.email, password: 'senha-redefinida-1' });
     expect(login.status).toBe(200);
+  });
+
+  it('remove jornada sem funcionários; recusa a que está em uso e preserva o histórico', async () => {
+    const body = {
+      startTime: '08:00',
+      dailyMinutes: 480,
+      workDays: [1, 2, 3, 4, 5],
+      lateToleranceMinutes: 10,
+      overtimeToleranceMinutes: 10,
+    };
+    const used = await ctx
+      .http()
+      .post('/api/work-schedules')
+      .set(asAdmin)
+      .send({ ...body, name: 'Em uso' });
+    const employee = await ctx.http().post('/api/employees').set(asAdmin).send({
+      name: 'Dona da jornada',
+      email: 'dona-jornada@teste.com',
+      password: 'senha-inicial-1',
+      workScheduleId: used.body.id,
+    });
+
+    const blocked = await ctx
+      .http()
+      .delete(`/api/work-schedules/${used.body.id}`)
+      .set(asAdmin);
+    expect(blocked.status).toBe(409);
+    expect(blocked.body.message).toContain('Dona da jornada');
+
+    // Tirou a jornada do funcionário: agora pode remover, e o histórico mantém os valores da época
+    await ctx
+      .http()
+      .patch(`/api/employees/${employee.body.id}`)
+      .set(asAdmin)
+      .send({ workScheduleId: null })
+      .expect(200);
+    await ctx
+      .http()
+      .delete(`/api/work-schedules/${used.body.id}`)
+      .set(asAdmin)
+      .expect(204);
+    expect(
+      await ctx.prisma.workSchedule.count({ where: { id: used.body.id } }),
+    ).toBe(0);
+    const history = await ctx.prisma.scheduleHistory.findMany({
+      where: { userId: employee.body.id },
+      orderBy: { effectiveFrom: 'asc' },
+    });
+    expect(history[0]).toMatchObject({
+      workScheduleId: null,
+      startTime: '08:00',
+      dailyMinutes: 480,
+    });
+
+    const missing = await ctx
+      .http()
+      .delete(`/api/work-schedules/${used.body.id}`)
+      .set(asAdmin);
+    expect(missing.status).toBe(404);
   });
 
   it('404 para funcionário ou jornada inexistente; 400 para jornada inválida no cadastro', async () => {

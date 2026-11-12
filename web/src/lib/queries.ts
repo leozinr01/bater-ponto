@@ -231,6 +231,14 @@ export function useSaveSchedule() {
   });
 }
 
+export function useDeleteSchedule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api<void>(`/work-schedules/${id}`, { method: 'DELETE' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['work-schedules'] }),
+  });
+}
+
 // ---- Feriados ----
 
 export function useHolidays(year: number) {

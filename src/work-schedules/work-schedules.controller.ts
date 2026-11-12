@@ -3,7 +3,9 @@ import { ApiPaginatedResponse } from '@/common/swagger';
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -12,8 +14,10 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiConflictResponse,
   ApiCreatedResponse,
   ApiForbiddenResponse,
+  ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
@@ -69,5 +73,19 @@ export class WorkSchedulesController {
     @Body() dto: UpdateWorkScheduleDto,
   ) {
     return this.workSchedulesService.update(id, dto);
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  @ApiOperation({
+    summary: 'Remove uma jornada',
+    description:
+      'Recusada (409) enquanto algum funcionário usa a jornada. Os dias já calculados não mudam.',
+  })
+  @ApiNoContentResponse()
+  @ApiNotFoundResponse()
+  @ApiConflictResponse({ description: 'Jornada em uso por funcionários' })
+  remove(@Param('id', ParseUUIDPipe) id: string) {
+    return this.workSchedulesService.remove(id);
   }
 }

@@ -1,10 +1,10 @@
-import { CalendarClock, Clock, Hourglass, Pencil, Plus } from 'lucide-react';
+import { CalendarClock, Clock, Hourglass, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useToast } from '../../components/toast';
 import { Alert, Button, Card, cn, EmptyState, Field, Input, Loading, Modal, PageHeader } from '../../components/ui';
 import { errorMessage } from '../../lib/api';
 import { durationInput, formatDuration, parseDuration, WEEKDAYS } from '../../lib/format';
-import { useSaveSchedule, useSchedules } from '../../lib/queries';
+import { useDeleteSchedule, useSaveSchedule, useSchedules } from '../../lib/queries';
 import type { WorkSchedule } from '../../lib/types';
 
 // Segunda primeiro, como no calendário comercial
@@ -156,9 +156,47 @@ function ScheduleFormModal({ schedule, onClose }: { schedule: WorkSchedule | nul
   );
 }
 
+function DeleteScheduleModal({ schedule, onClose }: { schedule: WorkSchedule; onClose: () => void }) {
+  const toast = useToast();
+  const remove = useDeleteSchedule();
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      icon={Trash2}
+      title={`Remover ${schedule.name}?`}
+      description="Os dias já calculados não mudam. Só dá para remover uma jornada que nenhum funcionário está usando."
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button
+            variant="danger"
+            loading={remove.isPending}
+            onClick={() =>
+              remove.mutate(schedule.id, {
+                onSuccess: () => {
+                  toast('Jornada removida.');
+                  onClose();
+                },
+              })
+            }
+          >
+            Remover
+          </Button>
+        </>
+      }
+    >
+      {remove.isError ? <Alert>{errorMessage(remove.error)}</Alert> : null}
+    </Modal>
+  );
+}
+
 export function SchedulesPage() {
   const schedules = useSchedules();
   const [editing, setEditing] = useState<WorkSchedule | 'new' | null>(null);
+  const [removing, setRemoving] = useState<WorkSchedule | null>(null);
 
   return (
     <>
@@ -203,15 +241,26 @@ export function SchedulesPage() {
                   <h2 className="font-semibold text-white">{s.name}</h2>
                   <p className="text-xs text-slate-500">{s.workDays.length} dias por semana</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setEditing(s)}
-                  title="Editar jornada"
-                  aria-label={`Editar ${s.name}`}
-                  className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-white/5 hover:text-white"
-                >
-                  <Pencil className="size-4" />
-                </button>
+                <div className="flex shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setEditing(s)}
+                    title="Editar jornada"
+                    aria-label={`Editar ${s.name}`}
+                    className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-white/5 hover:text-white"
+                  >
+                    <Pencil className="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRemoving(s)}
+                    title="Remover jornada"
+                    aria-label={`Remover ${s.name}`}
+                    className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-400"
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
+                </div>
               </div>
 
               <div className="relative mt-5 flex items-baseline gap-2">
@@ -260,6 +309,7 @@ export function SchedulesPage() {
       {editing && (
         <ScheduleFormModal schedule={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />
       )}
+      {removing && <DeleteScheduleModal schedule={removing} onClose={() => setRemoving(null)} />}
     </>
   );
 }
