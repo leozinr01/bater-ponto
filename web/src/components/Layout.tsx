@@ -1,5 +1,4 @@
 import {
-  ChartColumn,
   ClipboardList,
   Fingerprint,
   LayoutDashboard,
@@ -8,7 +7,6 @@ import {
   PiggyBank,
   Settings,
   UserRound,
-  Users,
   X,
   type LucideIcon,
 } from 'lucide-react';
@@ -38,8 +36,6 @@ const employeeLinks: NavEntry[] = [
 
 const adminLinks: NavEntry[] = [
   { to: '/admin/hoje', label: 'Hoje', icon: LayoutDashboard },
-  { to: '/admin/relatorio', label: 'Relatório', icon: ChartColumn },
-  { to: '/admin/funcionarios', label: 'Funcionários', icon: Users },
   { to: '/admin/configuracoes', label: 'Configurações', icon: Settings },
 ];
 

@@ -2,12 +2,14 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { cn } from '../../components/ui';
 
 const tabs = [
+  { to: 'funcionarios', label: 'Funcionários' },
+  { to: 'relatorio', label: 'Relatório' },
   { to: 'jornadas', label: 'Jornadas' },
   { to: 'feriados', label: 'Feriados' },
   { to: 'locais', label: 'Locais' },
 ];
 
-/** Cadastros usados no cálculo (jornadas, feriados e locais), agrupados em abas para enxugar o menu. */
+/** Funcionários, relatório e cadastros do cálculo, agrupados em abas para enxugar o menu. */
 export function SettingsPage() {
   return (
     <>

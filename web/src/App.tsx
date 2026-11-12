@@ -67,15 +67,17 @@ export function App() {
             <RequireAdmin>
               <Routes>
                 <Route path="hoje" element={<TodayPage />} />
-                <Route path="relatorio" element={<ReportPage />} />
-                <Route path="funcionarios" element={<EmployeesPage />} />
                 <Route path="configuracoes" element={<SettingsPage />}>
+                  <Route path="funcionarios" element={<EmployeesPage />} />
+                  <Route path="relatorio" element={<ReportPage />} />
                   <Route path="jornadas" element={<SchedulesPage />} />
                   <Route path="feriados" element={<HolidaysPage />} />
                   <Route path="locais" element={<WorkplacesPage />} />
-                  <Route index element={<Navigate to="/admin/configuracoes/jornadas" replace />} />
+                  <Route index element={<Navigate to="/admin/configuracoes/funcionarios" replace />} />
                 </Route>
-                {/* Endereços antigos, de quando cada cadastro tinha item próprio no menu */}
+                {/* Endereços antigos, de quando cada página tinha item próprio no menu */}
+                <Route path="funcionarios" element={<Navigate to="/admin/configuracoes/funcionarios" replace />} />
+                <Route path="relatorio" element={<Navigate to="/admin/configuracoes/relatorio" replace />} />
                 <Route path="jornadas" element={<Navigate to="/admin/configuracoes/jornadas" replace />} />
                 <Route path="feriados" element={<Navigate to="/admin/configuracoes/feriados" replace />} />
                 <Route path="locais" element={<Navigate to="/admin/configuracoes/locais" replace />} />
