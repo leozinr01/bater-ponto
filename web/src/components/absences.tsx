@@ -1,4 +1,4 @@
-import { Ban, HeartPulse } from 'lucide-react';
+import { HeartPulse, Trash2 } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { errorMessage } from '../lib/api';
 import { formatDate } from '../lib/format';
@@ -136,9 +136,9 @@ function CancelAbsenceModal({ absence, onClose }: { absence: Absence; onClose: (
     <Modal
       open
       onClose={onClose}
-      icon={Ban}
-      title={`Cancelar ${absenceLabels[absence.type].toLowerCase()}?`}
-      description={`${period(absence)}: os dias de trabalho voltam a contar como falta se não houver marcação. O lançamento fica no histórico como cancelado.`}
+      icon={Trash2}
+      title={`Remover ${absenceLabels[absence.type].toLowerCase()}?`}
+      description={`${period(absence)}: os dias de trabalho voltam a contar como falta se não houver marcação. O lançamento sai da lista, mas fica guardado no histórico como removido.`}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
@@ -150,13 +150,13 @@ function CancelAbsenceModal({ absence, onClose }: { absence: Absence; onClose: (
             onClick={() =>
               cancel.mutate(absence.id, {
                 onSuccess: () => {
-                  toast('Lançamento cancelado.');
+                  toast('Lançamento removido.');
                   onClose();
                 },
               })
             }
           >
-            Cancelar lançamento
+            Remover
           </Button>
         </>
       }
@@ -180,15 +180,39 @@ export function AbsencesCard({
 }) {
   const absences = useAbsences({ employeeId, from, to });
   const [canceling, setCanceling] = useState<Absence | null>(null);
-  if (!absences.data?.length) return null;
+  const [showRemoved, setShowRemoved] = useState(false);
+  const all = absences.data ?? [];
+  // Só o admin consulta os removidos; para o funcionário eles simplesmente somem
+  const removed = canManage ? all.filter((a) => a.canceled).length : 0;
+  // Removidos saem da lista (ficam guardados no histórico); dá para ver pelo link do cabeçalho
+  const visible = showRemoved ? all : all.filter((a) => !a.canceled);
+  if (!visible.length && !removed) return null;
+  if (!visible.length && !showRemoved) {
+    return (
+      <p className="text-right text-xs text-slate-500 print:hidden">
+        <button type="button" onClick={() => setShowRemoved(true)} className="hover:text-slate-300">
+          Ver abonos removidos ({removed})
+        </button>
+      </p>
+    );
+  }
 
   return (
     <Card className="overflow-hidden print:hidden">
-      <div className="border-b border-white/[0.06] px-4 py-2.5 sm:px-5">
+      <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-2.5 sm:px-5">
         <p className="text-xs font-medium tracking-wide text-slate-400 uppercase">Abonos e afastamentos</p>
+        {removed > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowRemoved((v) => !v)}
+            className="text-xs text-slate-500 transition-colors hover:text-slate-300"
+          >
+            {showRemoved ? 'Esconder removidos' : `Mostrar removidos (${removed})`}
+          </button>
+        )}
       </div>
       <ul className="divide-y divide-white/[0.04]">
-        {absences.data.map((a) => (
+        {visible.map((a) => (
           <li key={a.id} className={cn('flex items-center gap-3 px-4 py-3 sm:px-5', a.canceled && 'opacity-50')}>
             <Badge tone={a.canceled ? 'gray' : 'blue'} dot>
               {absenceLabels[a.type]}
@@ -198,12 +222,12 @@ export function AbsencesCard({
               <p className="truncate text-xs text-slate-500" title={a.reason}>
                 {a.reason}
                 {a.createdByName && ` · por ${a.createdByName}`}
-                {a.canceled && ' · cancelado'}
+                {a.canceled && ' · removido'}
               </p>
             </div>
             {canManage && !a.canceled && (
-              <Button size="sm" variant="ghost" icon={Ban} onClick={() => setCanceling(a)}>
-                Cancelar
+              <Button size="sm" variant="ghost" icon={Trash2} onClick={() => setCanceling(a)}>
+                Remover
               </Button>
             )}
           </li>
