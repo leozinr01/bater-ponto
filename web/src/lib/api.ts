@@ -116,7 +116,8 @@ async function parseError(res: Response): Promise<ApiError> {
   } catch {
     // corpo vazio ou não-JSON
   }
-  if (res.status === 429) {
+  // Limite automático por minuto (mensagem em inglês da biblioteca); o bloqueio da conta já vem explicado
+  if (res.status === 429 && (message === `Erro ${res.status}` || message.startsWith('ThrottlerException'))) {
     message = 'Muitas tentativas. Aguarde 1 minuto e tente novamente.';
   }
   return new ApiError(res.status, message);

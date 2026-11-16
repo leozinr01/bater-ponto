@@ -15,7 +15,11 @@ import {
   CreateWorkScheduleDto,
   UpdateWorkScheduleDto,
 } from './work-schedules.dto';
-import { recordSchedule, scheduleValuesChanged } from './schedule-history';
+import {
+  lockSchedule,
+  recordSchedule,
+  scheduleValuesChanged,
+} from './schedule-history';
 
 const sortDays = (days?: number[]) => days && [...days].sort((a, b) => a - b);
 
@@ -81,18 +85,29 @@ export class WorkSchedulesService {
    * pelo histórico. Os dias já calculados não mudam, pois o histórico guarda uma cópia dos valores.
    */
   async remove(id: string) {
-    await this.findById(id);
-    const users = await this.prisma.user.findMany({
-      where: { workScheduleId: id },
-      select: { name: true },
-      orderBy: { name: 'asc' },
+    await this.prisma.$transaction(async (tx) => {
+      // Mesma trava do cadastro/edição de funcionário com esta jornada: quem estiver atribuindo
+      // ela agora termina antes (e aparece na conferência abaixo) ou espera e recebe "jornada não encontrada"
+      await lockSchedule(tx, id);
+      const exists = await tx.workSchedule.findUnique({
+        where: { id },
+        select: { id: true },
+      });
+      if (!exists) {
+        throw new NotFoundException('Jornada de trabalho não encontrada');
+      }
+      const users = await tx.user.findMany({
+        where: { workScheduleId: id },
+        select: { name: true },
+        orderBy: { name: 'asc' },
+      });
+      if (users.length > 0) {
+        const names = users.map((u) => u.name).join(', ');
+        throw new ConflictException(
+          `Esta jornada está em uso por ${users.length === 1 ? '1 funcionário' : `${users.length} funcionários`} (${names}). Troque a jornada deles antes de remover.`,
+        );
+      }
+      await tx.workSchedule.delete({ where: { id } });
     });
-    if (users.length > 0) {
-      const names = users.map((u) => u.name).join(', ');
-      throw new ConflictException(
-        `Esta jornada está em uso por ${users.length === 1 ? '1 funcionário' : `${users.length} funcionários`} (${names}). Troque a jornada deles antes de remover.`,
-      );
-    }
-    await this.prisma.workSchedule.delete({ where: { id } });
   }
 }

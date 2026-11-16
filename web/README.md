@@ -32,9 +32,8 @@ npm run build      # gera web/dist (arquivos estáticos)
 | `/` | todos | Relógio, botão de registrar ponto e resumo de hoje (linha do tempo, saída prevista) |
 | `/registros` | todos | Aba **Por dia**: resumo do mês, semana clicável e dias agrupados por semana; imprime como espelho de ponto. Aba **Marcações**: cada marcação, com correções (`/espelho` e `/historico` redirecionam para cá) |
 | `/conta` | todos | Dados, jornada e troca de senha |
-| `/admin/relatorio` | admin | Totais do mês por funcionário, exportação em CSV |
-| `/admin/funcionarios` | admin | Cadastro, edição, jornada, redefinição de senha, desativação |
-| `/admin/configuracoes` | admin | Abas Jornadas, Feriados e Locais (cadastros usados no cálculo e na geolocalização) |
+| `/admin/hoje` | admin | Painel do dia: situação de cada funcionário e botão para registrar a batida de quem esqueceu |
+| `/admin/configuracoes` | admin | Abas **Funcionários** (cadastro, jornada, senha, desativação e exclusão), **Relatório** (totais do mês, PDF e CSV), **Jornadas**, **Feriados** e **Locais**. `/admin/funcionarios` e `/admin/relatorio` redirecionam para as abas |
 
 **Correções (admin):** no espelho de outro funcionário, clique num horário para trocar o horário ou desconsiderar a marcação, ou em **+** para incluir uma marcação faltante. A justificativa é obrigatória. Os horários são informados no fuso da empresa (`APP_TIMEZONE`) e enviados com deslocamento explícito.
 

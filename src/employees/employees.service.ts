@@ -3,7 +3,11 @@ import { paginated, toPrismaPage } from '@/common/pagination';
 import { localDate } from '@/common/time';
 import { PrismaService } from '@/infra/database/prisma.service';
 import { EnvService } from '@/infra/env/env.service';
-import { baselineRow, recordSchedule } from '@/work-schedules/schedule-history';
+import {
+  baselineRow,
+  lockSchedule,
+  recordSchedule,
+} from '@/work-schedules/schedule-history';
 import {
   BadRequestException,
   ConflictException,
@@ -20,13 +24,16 @@ import {
 
 const EMAIL_TAKEN = 'Já existe um usuário com este e-mail';
 
-/** Dois cadastros simultâneos passam pela checagem prévia; o índice único do banco decide. */
+/**
+ * Duas operações simultâneas passam pelas checagens prévias e o banco decide: e-mail
+ * repetido (índice único) ou jornada removida no meio (chave estrangeira).
+ */
 function rethrowEmailConflict(error: unknown): never {
-  if (
-    error instanceof Prisma.PrismaClientKnownRequestError &&
-    error.code === 'P2002'
-  ) {
-    throw new ConflictException(EMAIL_TAKEN);
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code === 'P2002') throw new ConflictException(EMAIL_TAKEN);
+    if (error.code === 'P2003') {
+      throw new BadRequestException('Jornada de trabalho não encontrada');
+    }
   }
   throw error;
 }
@@ -47,6 +54,7 @@ export class EmployeesService {
 
     return this.prisma
       .$transaction(async (tx) => {
+        if (dto.workScheduleId) await lockSchedule(tx, dto.workScheduleId);
         const user = await tx.user.create({
           data: {
             name: dto.name,
@@ -120,6 +128,7 @@ export class EmployeesService {
 
     return this.prisma
       .$transaction(async (tx) => {
+        if (dto.workScheduleId) await lockSchedule(tx, dto.workScheduleId);
         if (scheduleChanged) {
           // A troca vale a partir de hoje: os dias anteriores mantêm a jornada da época
           const previous = current.workScheduleId
@@ -160,34 +169,46 @@ export class EmployeesService {
         'Você não pode excluir a sua própria conta',
       );
     }
-    const user = await this.prisma.user.findUnique({
-      where: { id },
-      select: {
-        _count: {
+    const hasRecords = new ConflictException(
+      'Este funcionário já tem registros de ponto, abonos ou ajustes, que precisam ser guardados. Desative o acesso em vez de excluir.',
+    );
+    await this.prisma
+      .$transaction(async (tx) => {
+        // Mesma trava da batida e do abono: nenhum registro novo entra entre a conferência e a exclusão
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${id}))`;
+        const user = await tx.user.findUnique({
+          where: { id },
           select: {
-            punchClocks: true,
-            createdPunches: true,
-            voidedPunches: true,
-            absences: true,
-            createdAbsences: true,
-            canceledAbsences: true,
-            hourBankEntries: true,
-            createdHourBankEntries: true,
-            canceledHourBankEntries: true,
+            _count: {
+              select: {
+                punchClocks: true,
+                createdPunches: true,
+                voidedPunches: true,
+                absences: true,
+                createdAbsences: true,
+                canceledAbsences: true,
+                hourBankEntries: true,
+                createdHourBankEntries: true,
+                canceledHourBankEntries: true,
+              },
+            },
           },
-        },
-      },
-    });
-    if (!user) throw new NotFoundException('Funcionário não encontrado');
-    if (Object.values(user._count).some((n) => n > 0)) {
-      throw new ConflictException(
-        'Este funcionário já tem registros de ponto, abonos ou ajustes, que precisam ser guardados. Desative o acesso em vez de excluir.',
-      );
-    }
-    await this.prisma.$transaction([
-      this.prisma.scheduleHistory.deleteMany({ where: { userId: id } }),
-      this.prisma.user.delete({ where: { id } }),
-    ]);
+        });
+        if (!user) throw new NotFoundException('Funcionário não encontrado');
+        if (Object.values(user._count).some((n) => n > 0)) throw hasRecords;
+        await tx.scheduleHistory.deleteMany({ where: { userId: id } });
+        await tx.user.delete({ where: { id } });
+      })
+      .catch((error: unknown) => {
+        // Registro gravado por outro caminho bem no meio (ex.: ajuste de banco): a chave estrangeira barra
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2003'
+        ) {
+          throw hasRecords;
+        }
+        throw error;
+      });
   }
 
   async resetPassword(id: string, password: string) {
@@ -197,6 +218,9 @@ export class EmployeesService {
       data: {
         password: await hashPassword(password),
         tokenVersion: { increment: 1 },
+        // Redefinir a senha também libera a conta bloqueada por senhas erradas
+        failedLogins: 0,
+        lockedUntil: null,
       },
     });
   }

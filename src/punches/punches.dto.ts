@@ -159,7 +159,7 @@ export class RegisterPunchDto {
   @ApiPropertyOptional({
     type: OfflinePunchDto,
     description:
-      'Batida feita sem internet e enviada depois: vale o horário do aparelho (até 72h atrás)',
+      'Batida feita sem internet e enviada depois: vale o horário do aparelho (até 12h atrás)',
   })
   offline?: OfflinePunchDto;
 }
@@ -441,6 +441,22 @@ class TodayEmployeeDto {
   noLocationPunches: number;
 }
 
+class TodayOfflinePunchDto {
+  @ApiProperty() id: string;
+  @ApiProperty({ example: { id: 'uuid', name: 'Maria' } })
+  employee: { id: string; name: string };
+  @ApiProperty({
+    example: '2026-10-27T08:00:00-03:00',
+    description: 'Horário informado pelo aparelho',
+  })
+  localTime: string;
+  @ApiProperty({
+    example: '2026-10-27T10:05:00-03:00',
+    description: 'Quando chegou ao servidor',
+  })
+  receivedAt: string;
+}
+
 export class TodayResponseDto {
   @ApiProperty({ example: '2026-10-27' }) date: string;
   @ApiProperty({ example: 'America/Sao_Paulo' }) timezone: string;
@@ -458,4 +474,10 @@ export class TodayResponseDto {
   })
   counts: Record<string, number>;
   @ApiProperty({ type: [TodayEmployeeDto] }) employees: TodayEmployeeDto[];
+  @ApiProperty({
+    type: [TodayOfflinePunchDto],
+    description:
+      'Batidas offline recebidas nas últimas 24h: o horário veio do aparelho e vale conferir',
+  })
+  offlinePunches: TodayOfflinePunchDto[];
 }

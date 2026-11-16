@@ -52,7 +52,11 @@ export const PUNCH_INTERVAL_MINUTES = 60;
 const SAME_PUNCH_WINDOW_MS = 2 * 60_000;
 const MAX_PERIOD_DAYS = 93;
 /** Batida offline aceita até este tempo depois de feita. */
-export const OFFLINE_MAX_HOURS = 72;
+// Curto de propósito: o horário vem do aparelho, então uma janela longa facilita
+// "voltar no tempo" (bater às 10h dizendo que foi às 8h). Além disso o admin é avisado.
+export const OFFLINE_MAX_HOURS = 12;
+/** Batidas offline recebidas neste intervalo aparecem para o admin no painel do dia. */
+export const OFFLINE_ALERT_HOURS = 24;
 /** Folga para relógio do celular um pouco adiantado. */
 const CLOCK_SKEW_MS = 2 * 60_000;
 
@@ -424,10 +428,27 @@ export class PunchesService {
       orderBy: [{ name: 'asc' }, { id: 'asc' }],
     });
     const ids = employees.map((e) => e.id);
-    const [punches, holidays, absences] = await Promise.all([
+    const [punches, holidays, absences, offlinePunches] = await Promise.all([
       this.validPunchesByEmployee(ids, yesterday, today),
       this.holidays.byDate(yesterday, today),
       this.absences.byEmployeeAndDate(ids, yesterday, today),
+      this.prisma.punchClock.findMany({
+        where: {
+          userId: { in: ids },
+          offline: true,
+          voidedAt: null,
+          createdAt: {
+            gte: new Date(now.getTime() - OFFLINE_ALERT_HOURS * 3_600_000),
+          },
+        },
+        select: {
+          id: true,
+          timestamp: true,
+          createdAt: true,
+          user: { select: { id: true, name: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
     ]);
     const holiday = holidays.get(today) ?? null;
 
@@ -498,6 +519,12 @@ export class PunchesService {
       holiday,
       counts,
       employees: items,
+      offlinePunches: offlinePunches.map((p) => ({
+        id: p.id,
+        employee: p.user,
+        localTime: localDateTime(p.timestamp, this.tz),
+        receivedAt: localDateTime(p.createdAt, this.tz),
+      })),
     };
   }
 

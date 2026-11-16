@@ -56,8 +56,17 @@ describe('Ponto (e2e)', () => {
         await ctx.prisma.punchClock.count({ where: { userId: employee.id } }),
       ).toBe(1);
 
-      // Velha demais ou no futuro: recusada
-      for (const hours of [80, -1]) {
+      // Aparece para o admin no painel do dia, para conferir o horário informado pelo celular
+      const today = await ctx.http().get('/api/punches/today').set(asAdmin);
+      expect(today.body.offlinePunches).toContainEqual(
+        expect.objectContaining({
+          id: first.body.id,
+          employee: { id: employee.id, name: employee.name },
+        }),
+      );
+
+      // Velha demais (janela de 12h) ou no futuro: recusada
+      for (const hours of [13, -1]) {
         const res = await ctx
           .http()
           .post('/api/punches')

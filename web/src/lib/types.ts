@@ -224,6 +224,17 @@ export interface TodayOverview {
   holiday: string | null;
   counts: Record<PresenceStatus, number>;
   employees: TodayEmployee[];
+  /** Batidas offline recebidas nas últimas 24h: o horário veio do celular e vale conferir. */
+  offlinePunches: TodayOfflinePunch[];
+}
+
+export interface TodayOfflinePunch {
+  id: string;
+  employee: { id: string; name: string };
+  /** Horário informado pelo aparelho. */
+  localTime: string;
+  /** Quando chegou ao servidor. */
+  receivedAt: string;
 }
 
 export interface Absence {

@@ -197,6 +197,46 @@ describe('Autenticação (e2e)', () => {
     expect(statuses).toContain(429);
   });
 
+  it('bloqueia a conta por 15 min após 5 senhas erradas seguidas, inclusive para a senha certa', async () => {
+    // Login certo no meio zera a contagem (outra conta: o limite por minuto conta por e-mail)
+    const other = await createUser(ctx);
+    for (let i = 0; i < 4; i++) {
+      expect((await login(other.email, 'senha-errada-1')).status).toBe(401);
+    }
+    expect((await login(other.email, TEST_PASSWORD)).status).toBe(200);
+    expect(
+      (await ctx.prisma.user.findUniqueOrThrow({ where: { id: other.id } }))
+        .failedLogins,
+    ).toBe(0);
+
+    const user = await createUser(ctx);
+    const admin = await createUser(ctx, { role: 'ADMIN' });
+    for (let i = 0; i < 4; i++) {
+      expect((await login(user.email, 'senha-errada-1')).status).toBe(401);
+    }
+    const fifth = await login(user.email, 'senha-errada-1');
+    expect(fifth.status).toBe(429);
+    expect(fifth.body.message).toMatch(/Tente de novo em 15 min/);
+
+    // Durante o bloqueio, nem a senha certa entra
+    expect((await login(user.email, TEST_PASSWORD)).status).toBe(429);
+    const stored = await ctx.prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+    });
+    expect(stored.lockedUntil!.getTime()).toBeGreaterThan(
+      Date.now() + 14 * 60_000,
+    );
+
+    // O admin redefine a senha e libera a conta
+    await ctx
+      .http()
+      .post(`/api/employees/${user.id}/password`)
+      .set(authHeader(ctx, admin))
+      .send({ password: 'senha-nova-123' })
+      .expect(204);
+    expect((await login(user.email, 'senha-nova-123')).status).toBe(200);
+  });
+
   it('a equipe inteira faz login pelo mesmo IP sem ser barrada', async () => {
     const statuses: number[] = [];
     for (let i = 0; i < 15; i++) {

@@ -25,6 +25,10 @@ model User {
   active         Boolean  @default(true)
   /// Incrementado na troca de senha: tokens com versão diferente são rejeitados.
   tokenVersion   Int      @default(0) @map("token_version")
+  /// Senhas erradas seguidas; zera no login certo e ao bloquear.
+  failedLogins   Int       @default(0) @map("failed_logins")
+  /// Login bloqueado até esta hora, depois de muitas senhas erradas seguidas.
+  lockedUntil    DateTime? @map("locked_until")
   /// Recebe os lembretes de entrada e saída por e-mail (quando o SMTP está configurado).
   emailReminders Boolean  @default(true) @map("email_reminders")
   workScheduleId String?  @map("work_schedule_id")

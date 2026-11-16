@@ -121,4 +121,26 @@ describe('adminNotifications', () => {
     expect(list.map((n) => n.title)).toEqual(['1 funcionário atrasado', '2 batidas fora do local']);
     expect(list[0].text).toBe('Ana');
   });
+
+  it('avisa cada batida offline, que tem o horário informado pelo celular', () => {
+    const overview = {
+      date: '2026-11-10',
+      employees: [],
+      offlinePunches: [
+        {
+          id: 'p1',
+          employee: { id: 'a', name: 'Ana Souza' },
+          localTime: '2026-11-10T08:00:00-03:00',
+          receivedAt: '2026-11-10T10:05:00-03:00',
+        },
+      ],
+    } as unknown as TodayOverview;
+    const [notice] = adminNotifications(overview);
+    expect(notice).toMatchObject({
+      id: 'batida-offline-p1',
+      title: 'Batida offline de Ana',
+      to: '/registros?funcionario=a&mes=2026-11',
+    });
+    expect(notice.text).toContain('às 08:00 (recebida às 10:05)');
+  });
 });

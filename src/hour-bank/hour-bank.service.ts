@@ -14,7 +14,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { HourBankEntry } from '@prisma/client';
+import { HourBankEntry, Prisma } from '@prisma/client';
 import { CreateHourBankEntryDto, HourBankQueryDto } from './hour-bank.dto';
 import { emptyMovement, Movement, runLedger } from './ledger';
 
@@ -147,16 +147,27 @@ export class HourBankService {
     });
     if (!employee) throw new NotFoundException('Funcionário não encontrado');
 
-    const entry = await this.prisma.hourBankEntry.create({
-      data: {
-        userId: dto.employeeId,
-        date: dto.date,
-        minutes: dto.minutes,
-        reason: dto.reason.trim(),
-        createdById: actor.id,
-      },
-      include: { createdBy: { select: { name: true } } },
-    });
+    const entry = await this.prisma.hourBankEntry
+      .create({
+        data: {
+          userId: dto.employeeId,
+          date: dto.date,
+          minutes: dto.minutes,
+          reason: dto.reason.trim(),
+          createdById: actor.id,
+        },
+        include: { createdBy: { select: { name: true } } },
+      })
+      .catch((error: unknown) => {
+        // Funcionário excluído entre a conferência acima e a gravação
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2003'
+        ) {
+          throw new NotFoundException('Funcionário não encontrado');
+        }
+        throw error;
+      });
     return this.toResponse(entry, entry.createdBy.name);
   }
 

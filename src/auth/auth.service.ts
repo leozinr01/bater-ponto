@@ -2,6 +2,8 @@ import { PrismaService } from '@/infra/database/prisma.service';
 import { EnvService } from '@/infra/env/env.service';
 import {
   BadRequestException,
+  HttpException,
+  HttpStatus,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -17,6 +19,21 @@ const DUMMY_HASH =
 
 export const hashPassword = (password: string) => hash(password, BCRYPT_ROUNDS);
 
+/** Senhas erradas seguidas que bloqueiam o login da conta, e por quanto tempo. */
+export const MAX_FAILED_LOGINS = 5;
+export const LOGIN_LOCK_MINUTES = 15;
+
+const lockedError = (until: Date) => {
+  const minutes = Math.max(
+    1,
+    Math.ceil((until.getTime() - Date.now()) / 60_000),
+  );
+  return new HttpException(
+    `Muitas senhas erradas seguidas. Tente de novo em ${minutes} min ou peça ao administrador para redefinir a senha.`,
+    HttpStatus.TOO_MANY_REQUESTS,
+  );
+};
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -25,16 +42,48 @@ export class AuthService {
     private env: EnvService,
   ) {}
 
+  /**
+   * O limite por minuto (ThrottlerGuard) fica na memória de cada instância da Vercel; este
+   * contador fica no banco e vale para todas: 5 senhas erradas seguidas bloqueiam a conta por 15 min.
+   */
   async login(email: string, password: string) {
     const user = await this.prisma.user.findUnique({ where: { email } });
+
+    // Durante o bloqueio nem a senha certa entra, senão o bloqueio não segura quem está adivinhando
+    if (user?.lockedUntil && user.lockedUntil > new Date()) {
+      throw lockedError(user.lockedUntil);
+    }
 
     const valid = await compare(password, user?.password ?? DUMMY_HASH);
 
     if (!user || !valid || !user.active) {
+      if (user && !valid) await this.registerFailedLogin(user.id);
       throw new UnauthorizedException('E-mail ou senha inválidos');
     }
 
+    if (user.failedLogins > 0 || user.lockedUntil) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { failedLogins: 0, lockedUntil: null },
+      });
+    }
     return this.issueTokens(user);
+  }
+
+  private async registerFailedLogin(userId: string) {
+    const { failedLogins } = await this.prisma.user.update({
+      where: { id: userId },
+      data: { failedLogins: { increment: 1 } },
+      select: { failedLogins: true },
+    });
+    if (failedLogins >= MAX_FAILED_LOGINS) {
+      const until = new Date(Date.now() + LOGIN_LOCK_MINUTES * 60_000);
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { failedLogins: 0, lockedUntil: until },
+      });
+      throw lockedError(until);
+    }
   }
 
   async refresh(refreshToken: string) {

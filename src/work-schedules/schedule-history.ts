@@ -53,6 +53,15 @@ export async function recordSchedule(
   });
 }
 
+/**
+ * Serializa a remoção de uma jornada com quem a atribui a um funcionário, para a remoção
+ * não deixar ninguém sem jornada fora do histórico.
+ */
+export async function lockSchedule(db: Db, scheduleId: string) {
+  const key = `jornada:${scheduleId}`;
+  await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
+}
+
 /** Linha base de um funcionário recém-cadastrado. */
 export function baselineRow(userId: string, schedule: ScheduleValues) {
   return { userId, effectiveFrom: HISTORY_BASELINE, ...snapshot(schedule) };

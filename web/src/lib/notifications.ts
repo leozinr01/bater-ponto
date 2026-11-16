@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from './auth';
 import { useServerNow } from './clock';
-import { addDays, currentMonth, formatDate, monthRange, today } from './format';
+import { addDays, currentMonth, dateOf, formatDate, monthRange, timeOf, today } from './format';
 import { usePendingPunches } from './offline-queue';
 import { useTimesheet, useToday } from './queries';
 import type { Timesheet, TodayOverview } from './types';
@@ -134,6 +134,16 @@ export function adminNotifications(overview: TodayOverview): AppNotification[] {
         .slice(0, 5)
         .join(', '),
       to: '/admin/hoje',
+    });
+  }
+  // O horário da batida offline vem do celular: o admin confere se faz sentido
+  for (const p of overview.offlinePunches ?? []) {
+    list.push({
+      id: `batida-offline-${p.id}`,
+      tone: 'amber',
+      title: `Batida offline de ${p.employee.name.split(' ')[0]}`,
+      text: `Horário informado pelo celular: ${formatDate(dateOf(p.localTime), false)} às ${timeOf(p.localTime)} (recebida às ${timeOf(p.receivedAt)}). Confira se está correta.`,
+      to: `/registros?funcionario=${p.employee.id}&mes=${p.localTime.slice(0, 7)}`,
     });
   }
   return list;
