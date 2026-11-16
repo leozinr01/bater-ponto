@@ -1,8 +1,9 @@
 import { alertLabels, dayStatusLabel } from '../components/timesheet';
-import type { ExportChart, ExportSection, ExportTable } from './export';
+import { api } from './api';
+import { exportTable, type ExportChart, type ExportFormat, type ExportSection, type ExportTable } from './export';
 import { formatDate, formatMinutes, formatSigned, timeOf, WEEKDAYS } from './format';
 import { balanceText, dailyBars, punchColumns } from './timesheet-cells';
-import type { Timesheet } from './types';
+import type { Paginated, ReportItem, Timesheet } from './types';
 
 const dash = (minutes: number | null | undefined) => (minutes ? formatMinutes(minutes) : '–');
 const time = (p: { localTime: string } | null) => (p ? timeOf(p.localTime) : '–');
@@ -136,6 +137,37 @@ export function buildTimesheetExport(sheet: Timesheet, from: string, to: string)
     ],
     sections: [timesheetSection(sheet)],
   };
+}
+
+/** Todos os funcionários do relatório do período (todas as páginas). */
+export async function fetchReportItems(from: string, to: string) {
+  const items: ReportItem[] = [];
+  for (let page = 1; ; page++) {
+    const res = await api<Paginated<ReportItem>>('/punches/report', { query: { from, to, page, pageSize: 100 } });
+    items.push(...res.data);
+    if (page >= res.meta.totalPages) break;
+  }
+  return items;
+}
+
+/** Espelho de ponto de todos os funcionários num arquivo só: uma seção (página) por funcionário. */
+export async function exportAllTimesheets(from: string, to: string, format: ExportFormat) {
+  const items = await fetchReportItems(from, to);
+  const sections: ExportSection[] = [];
+  for (const { employee } of items) {
+    const sheet = await api<Timesheet>('/punches/timesheet', { query: { employeeId: employee.id, from, to } });
+    sections.push(timesheetSection(sheet, employee.name));
+  }
+  await exportTable(format, {
+    filename: `espelho-ponto_todos_${from.slice(0, 7)}`,
+    title: 'Espelho de ponto',
+    subtitle: `Período de ${formatDate(from)} a ${formatDate(to)}`,
+    meta: [
+      ['Funcionários', String(items.length)],
+      ['Emissão', new Date().toLocaleDateString('pt-BR')],
+    ],
+    sections,
+  });
 }
 
 /** Nome do arquivo sem acentos nem espaços: "João Silva" -> "joao-silva". */

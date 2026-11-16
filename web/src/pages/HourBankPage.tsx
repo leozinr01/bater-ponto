@@ -1,4 +1,4 @@
-import { Ban, PiggyBank, Plus, SlidersHorizontal } from 'lucide-react';
+import { Ban, PiggyBank, Plus, SlidersHorizontal, Users } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { BankTrendChart } from '../components/BankTrendChart';
@@ -179,7 +179,9 @@ export function HourBankPage() {
   const { user, isAdmin } = useAuth();
   const [params, setParams] = useSearchParams();
   const employeeId = (isAdmin && params.get('funcionario')) || '';
-  const bank = useHourBank({ employeeId: employeeId || undefined });
+  // O admin não bate ponto: vê o banco de um funcionário (o seletor já escolhe o primeiro)
+  const ready = !isAdmin || !!employeeId;
+  const bank = useHourBank({ employeeId: employeeId || undefined }, ready);
   const [adding, setAdding] = useState(false);
   const [canceling, setCanceling] = useState<HourBankEntry | null>(null);
   const data = bank.data;
@@ -217,7 +219,11 @@ export function HourBankPage() {
         }
       />
 
-      {bank.isPending ? (
+      {!ready ? (
+        <Card>
+          <EmptyState icon={Users}>Escolha um funcionário no seletor acima para ver o banco de horas.</EmptyState>
+        </Card>
+      ) : bank.isPending ? (
         <Loading rows={6} />
       ) : bank.isError || !data ? (
         <Alert>{errorMessage(bank.error)}</Alert>

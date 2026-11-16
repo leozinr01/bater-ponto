@@ -512,6 +512,13 @@ describe('Ponto (e2e)', () => {
       expect(paged.status).toBe(200);
       expect(paged.body.data).toHaveLength(1);
       expect(paged.body.meta.pageSize).toBe(1);
+
+      // Administradores não batem ponto: ficam fora do relatório
+      const all = await ctx
+        .http()
+        .get(`/api/punches/report?${period}&pageSize=100`)
+        .set(asAdmin);
+      expect(all.body.data.map((i) => i.employee.id)).not.toContain(admin.id);
     });
 
     it('inclusão manual completa o dia sem apagar nada', async () => {

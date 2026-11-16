@@ -344,7 +344,11 @@ export class PunchesService {
   async report(query: ReportQueryDto) {
     this.assertPeriod(query.from, query.to);
 
-    const where: Prisma.UserWhereInput = { id: query.employeeId };
+    // Administradores não batem ponto: ficam fora do relatório e das exportações de todos
+    const where: Prisma.UserWhereInput = {
+      id: query.employeeId,
+      role: 'EMPLOYEE',
+    };
     // Página e total em paralelo: numa lista, não precisam da mesma transação
     const [employees, total] = await Promise.all([
       this.prisma.user.findMany({

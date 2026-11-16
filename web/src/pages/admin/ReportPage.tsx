@@ -14,11 +14,11 @@ import {
   Stat,
   table,
 } from '../../components/ui';
-import { api, errorMessage } from '../../lib/api';
+import { errorMessage } from '../../lib/api';
 import { currentMonth, formatDate, formatMinutes, monthRange } from '../../lib/format';
 import { useReport } from '../../lib/queries';
-import { timesheetSection } from '../../lib/timesheet-export';
-import type { Paginated, ReportItem, Timesheet } from '../../lib/types';
+import { exportAllTimesheets, fetchReportItems } from '../../lib/timesheet-export';
+import type { ReportItem } from '../../lib/types';
 import { ExportMenu, type ExportOption } from '../../components/ExportMenu';
 import { MonthNav } from '../../components/MonthNav';
 import { exportTable, type ExportFormat } from '../../lib/export';
@@ -31,17 +31,6 @@ const reportExportOptions: ExportOption<ReportExport>[] = [
   { value: 'pdf-dias', label: 'Detalhado por dia em PDF', hint: 'Entrada, saída e hora extra de cada dia', icon: FileText },
   { value: 'csv-dias', label: 'Detalhado por dia em CSV', hint: 'Um bloco por funcionário, para o Excel', icon: FileSpreadsheet },
 ];
-
-/** Todos os funcionários do relatório (todas as páginas). */
-async function fetchReportItems(from: string, to: string) {
-  const items: ReportItem[] = [];
-  for (let page = 1; ; page++) {
-    const res = await api<Paginated<ReportItem>>('/punches/report', { query: { from, to, page, pageSize: 100 } });
-    items.push(...res.data);
-    if (page >= res.meta.totalPages) break;
-  }
-  return items;
-}
 
 /** Resumo por funcionário, com uma linha de total no fim. */
 async function exportSummary(from: string, to: string, format: ExportFormat) {
@@ -118,31 +107,9 @@ async function exportSummary(from: string, to: string, format: ExportFormat) {
   });
 }
 
-/** Espelho de cada funcionário (data, entrada, intervalo, saída, hora extra) com o resumo de cada um. */
-async function exportByDay(from: string, to: string, format: ExportFormat) {
-  const items = await fetchReportItems(from, to);
-  const sections = [];
-  for (const { employee } of items) {
-    const sheet = await api<Timesheet>('/punches/timesheet', { query: { employeeId: employee.id, from, to } });
-    sections.push(timesheetSection(sheet, employee.name));
-  }
-  await exportTable(format, {
-    filename: `relatorio-ponto-por-dia_${from}_${to}`,
-    title: 'Relatório do período',
-    subtitle: 'Espelho detalhado por funcionário',
-    meta: [
-      ['Período', `${formatDate(from)} a ${formatDate(to)}`],
-      ['Funcionários', String(items.length)],
-      ['Emissão', new Date().toLocaleDateString('pt-BR')],
-      ['Formato', 'Detalhado por dia'],
-    ],
-    sections,
-  });
-}
-
 function exportReport(from: string, to: string, choice: ReportExport) {
-  if (choice === 'pdf-dias') return exportByDay(from, to, 'pdf');
-  if (choice === 'csv-dias') return exportByDay(from, to, 'csv');
+  if (choice === 'pdf-dias') return exportAllTimesheets(from, to, 'pdf');
+  if (choice === 'csv-dias') return exportAllTimesheets(from, to, 'csv');
   return exportSummary(from, to, choice);
 }
 

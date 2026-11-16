@@ -28,15 +28,19 @@ import type {
 
 // ---- Ponto ----
 
-export function useTimesheet(params: {
-  employeeId?: string;
-  from: string;
-  to: string;
-}) {
+export function useTimesheet(
+  params: {
+    employeeId?: string;
+    from: string;
+    to: string;
+  },
+  enabled = true,
+) {
   return useQuery({
     queryKey: ['timesheet', params],
     queryFn: () => api<Timesheet>('/punches/timesheet', { query: params }),
     placeholderData: keepPreviousData,
+    enabled,
   });
 }
 
@@ -359,10 +363,11 @@ export function useCancelAbsence() {
 
 // ---- Banco de horas ----
 
-export function useHourBank(params: { employeeId?: string }) {
+export function useHourBank(params: { employeeId?: string }, enabled = true) {
   return useQuery({
     queryKey: ['hour-bank', params],
     queryFn: () => api<HourBank>('/hour-bank', { query: params }),
+    enabled,
   });
 }
 
