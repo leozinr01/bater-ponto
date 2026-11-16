@@ -1,24 +1,45 @@
 import { alertLabels, dayStatusLabel } from '../components/timesheet';
-import type { ExportSection, ExportTable } from './export';
-import { formatDate, formatDuration, formatMinutes, timeOf, WEEKDAYS } from './format';
+import type { ExportChart, ExportSection, ExportTable } from './export';
+import { formatDate, formatMinutes, formatSigned, timeOf, WEEKDAYS } from './format';
+import { balanceText, dailyBars, punchColumns } from './timesheet-cells';
 import type { Timesheet } from './types';
 
 const dash = (minutes: number | null | undefined) => (minutes ? formatMinutes(minutes) : '–');
-const signedBalance = (overtime: number | null, deficit: number | null) => {
-  if (overtime === null && deficit === null) return '–';
-  const b = (overtime ?? 0) - (deficit ?? 0);
-  return `${b > 0 ? '+' : ''}${formatMinutes(b)}`;
-};
+const time = (p: { localTime: string } | null) => (p ? timeOf(p.localTime) : '–');
+
+/** Horas trabalhadas por dia, com a parte prevista do dia como marca. */
+function hoursChart(sheet: Timesheet): ExportChart | undefined {
+  if (!sheet.schedule) return undefined;
+  return {
+    title: 'Horas trabalhadas por dia',
+    bars: dailyBars(sheet).map((b) => ({
+      label: String(Number(b.date.slice(8))),
+      value: b.worked,
+      target: b.expected,
+      tone: b.tone,
+      marker: b.absent,
+    })),
+    legend: [
+      { label: 'Cumpriu o previsto', tone: 'green' },
+      { label: 'Abaixo do previsto ou falta', tone: 'red' },
+      { label: 'Folga ou feriado trabalhado', tone: 'amber' },
+      { label: 'Previsto do dia', tone: 'target' },
+    ],
+  };
+}
 
 /**
  * Espelho de ponto como tabela: uma linha por dia com entrada, intervalo, saída,
- * horas trabalhadas, hora extra com o adicional e horas negativas. Marcações além
- * da quarta vão para a coluna "Outras". No fim, destaques coloridos e um resumo.
+ * horas trabalhadas, hora extra (+) com o adicional e horas negativas (-). Marcações
+ * além da quarta vão para a coluna "Outras". Antes da tabela, destaques e o gráfico
+ * de horas por dia; no fim, o resumo.
  */
 export function timesheetSection(sheet: Timesheet, title?: string): ExportSection {
   const t = sheet.totals;
-  const extras =
-    (t.overtime50Minutes ?? 0) + (t.overtime100Minutes ?? 0);
+  const balance =
+    t.overtimeMinutes === null && t.deficitMinutes === null
+      ? null
+      : (t.overtimeMinutes ?? 0) - (t.deficitMinutes ?? 0);
 
   return {
     title,
@@ -38,23 +59,20 @@ export function timesheetSection(sheet: Timesheet, title?: string): ExportSectio
       'Situação',
     ],
     rows: sheet.days.map((d) => {
-      const times = d.punches.map((p) => timeOf(p.localTime));
-      // Com duas marcações não houve intervalo: a segunda é a saída
-      const [entry, breakOut, breakIn, exit] =
-        times.length <= 2 ? [times[0], undefined, undefined, times[1]] : times;
+      const c = punchColumns(d);
       return [
         formatDate(d.date, false),
         WEEKDAYS[d.weekday],
-        entry ?? '–',
-        breakOut ?? '–',
-        breakIn ?? '–',
-        exit ?? '–',
-        times.slice(4).join(' ') || '–',
+        time(c.entry),
+        time(c.breakOut),
+        time(c.breakIn),
+        time(c.exit),
+        c.others.map((p) => timeOf(p.localTime)).join(' ') || '–',
         d.punches.length ? formatMinutes(d.workedMinutes) : '–',
-        d.overtimeMinutes ? `${formatMinutes(d.overtimeMinutes)} (${d.overtimeRate}%)` : '–',
-        dash(d.deficitMinutes),
+        d.overtimeMinutes ? `${formatSigned(d.overtimeMinutes)} (${d.overtimeRate}%)` : '–',
+        d.deficitMinutes ? formatSigned(-d.deficitMinutes) : '–',
         dash(d.lateMinutes),
-        signedBalance(d.overtimeMinutes, d.deficitMinutes),
+        balanceText(d, formatSigned),
         [
           dayStatusLabel(d),
           d.absence?.reason,
@@ -67,21 +85,35 @@ export function timesheetSection(sheet: Timesheet, title?: string): ExportSectio
       ];
     }),
     highlights: [
-      { label: 'Trabalhado', value: formatDuration(t.workedMinutes), tone: 'brand' },
       {
-        label: 'Saldo',
-        value: signedBalance(t.overtimeMinutes, t.deficitMinutes),
-        tone: ((t.overtimeMinutes ?? 0) - (t.deficitMinutes ?? 0)) >= 0 ? 'green' : 'red',
+        label: 'Trabalhado',
+        value: `${formatMinutes(t.workedMinutes)}${t.expectedMinutes !== null ? ` de ${formatMinutes(t.expectedMinutes)}` : ''}`,
+        tone: 'brand',
       },
-      { label: 'Hora extra', value: extras ? formatDuration(extras) : '0h', tone: 'amber' },
-      { label: 'Atrasos', value: t.lateMinutes ? formatDuration(t.lateMinutes) : '0h', tone: t.lateMinutes ? 'red' : 'gray' },
+      {
+        label: 'Saldo do período',
+        value: formatSigned(balance),
+        tone: balance === null || balance === 0 ? 'gray' : balance > 0 ? 'green' : 'red',
+      },
+      {
+        label: 'Hora extra',
+        value: t.overtimeMinutes ? formatSigned(t.overtimeMinutes) : '0:00',
+        tone: t.overtimeMinutes ? 'green' : 'gray',
+      },
+      {
+        label: 'Horas negativas',
+        value: t.deficitMinutes ? formatSigned(-t.deficitMinutes) : '0:00',
+        tone: t.deficitMinutes ? 'red' : 'gray',
+      },
     ],
+    chart: hoursChart(sheet),
     summary: [
       ['Horas trabalhadas', formatMinutes(t.workedMinutes)],
       ['Horas previstas', formatMinutes(t.expectedMinutes)],
-      ['Hora extra 50% (semana e sábado)', formatMinutes(t.overtime50Minutes)],
-      ['Hora extra 100% (domingo e feriado)', formatMinutes(t.overtime100Minutes)],
-      ['Horas negativas', formatMinutes(t.deficitMinutes)],
+      ['Hora extra 50% (semana e sábado)', t.overtime50Minutes ? formatSigned(t.overtime50Minutes) : '0:00'],
+      ['Hora extra 100% (domingo e feriado)', t.overtime100Minutes ? formatSigned(t.overtime100Minutes) : '0:00'],
+      ['Horas negativas', t.deficitMinutes ? formatSigned(-t.deficitMinutes) : '0:00'],
+      ['Saldo do período', formatSigned(balance)],
       ['Atrasos', formatMinutes(t.lateMinutes)],
       ['Faltas (dias)', t.absentDays],
       ['Dias incompletos', t.incompleteDays],

@@ -16,6 +16,17 @@ export type ExportSection = {
    * Se verdadeiro, imprime uma área de assinatura ao final da seção (funcionário e responsável).
    */
   signatures?: boolean;
+  /** Gráfico de barras (ex.: horas por dia), entre os destaques e a tabela. Só no PDF. */
+  chart?: ExportChart;
+};
+
+export type ChartTone = 'green' | 'red' | 'amber' | 'gray';
+
+export type ExportChart = {
+  title: string;
+  /** Valores em minutos; o eixo mostra horas. `target` vira uma marca tracejada na barra. */
+  bars: { label: string; value: number; target: number | null; tone: ChartTone; marker?: boolean }[];
+  legend?: { label: string; tone: ChartTone | 'target' }[];
 };
 
 /** Arquivo pronto para exportar. */
@@ -38,9 +49,9 @@ function download(blob: Blob, filename: string) {
 }
 
 // Texto começando com = + - @ viraria fórmula no Excel; o apóstrofo o mantém como texto.
-// Saldos como "+1:30" e "-0:15" são só números e passam direto.
+// Saldos como "+1:30", "-0:15" e "+1:30 (50%)" são só números e passam direto.
 const safeCell = (v: string | number) =>
-  typeof v === 'string' && /^[=+\-@\t\r]/.test(v) && !/^[+-]\d+(:\d{2})?$/.test(v) ? `'${v}` : String(v);
+  typeof v === 'string' && /^[=+\-@\t\r]/.test(v) && !/^[+-]\d+(:\d{2})?( \(\d+%\))?$/.test(v) ? `'${v}` : String(v);
 
 /** CSV separado por ";" e com BOM, para abrir direto no Excel em português. */
 function downloadCsv({ filename, title, subtitle, meta, sections }: ExportTable) {
@@ -115,10 +126,13 @@ function drawHeader(doc: Doc, pageWidth: number, title: string, subtitle?: strin
         const x = 40 + c * colWidth;
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(...COLORS.textMuted);
-        doc.text(`${item[0]}:`, x, rowY);
+        const label = `${item[0]}:`;
+        doc.text(label, x, rowY);
+        // Medido ainda em negrito, a fonte do rótulo: medir com a normal grudava o valor nele
+        const valueX = x + doc.getTextWidth(label) + 4;
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(...COLORS.text);
-        doc.text(String(item[1]), x + doc.getTextWidth(`${item[0]}: `), rowY);
+        doc.text(String(item[1]), valueX, rowY);
       }
       rowY += 14;
     }
@@ -159,6 +173,90 @@ function drawHighlights(doc: Doc, pageWidth: number, startY: number, highlights:
   }
 
   return startY + cardHeight + 16;
+}
+
+const chartColor = (t: ChartTone): [number, number, number] =>
+  t === 'green' ? [52, 168, 110] : t === 'red' ? [220, 76, 76] : t === 'amber' ? [222, 150, 40] : [203, 213, 225];
+
+/** Gráfico de barras com eixo em horas, marca tracejada do previsto e legenda. */
+function drawChart(doc: Doc, pageWidth: number, startY: number, chart: ExportChart) {
+  const left = 40;
+  const axisWidth = 26;
+  const plotX = left + axisWidth;
+  const plotWidth = pageWidth - 80 - axisWidth;
+  const plotHeight = 96;
+  const titleY = startY + 4;
+  const plotTop = startY + 16;
+  const plotBottom = plotTop + plotHeight;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(...COLORS.text);
+  doc.text(chart.title, left, titleY);
+
+  const max = Math.max(60, ...chart.bars.map((b) => Math.max(b.value, b.target ?? 0)));
+  const topMinutes = Math.ceil((max * 1.1) / 60) * 60;
+  const yOf = (minutes: number) => plotBottom - (minutes / topMinutes) * plotHeight;
+
+  // Linhas de grade a cada 2h (ou 1h em escalas pequenas)
+  const step = topMinutes > 8 * 60 ? 120 : 60;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  for (let m = 0; m <= topMinutes; m += step) {
+    const y = yOf(m);
+    doc.setDrawColor(...COLORS.border);
+    doc.setLineWidth(m === 0 ? 0.8 : 0.3);
+    doc.line(plotX, y, plotX + plotWidth, y);
+    doc.setTextColor(...COLORS.textMuted);
+    const label = `${m / 60}h`;
+    doc.text(label, plotX - 4 - doc.getTextWidth(label), y + 2.5);
+  }
+
+  const slot = plotWidth / chart.bars.length;
+  const barWidth = Math.min(16, slot * 0.68);
+  chart.bars.forEach((bar, i) => {
+    const x = plotX + i * slot + (slot - barWidth) / 2;
+    if (bar.marker) {
+      // Falta: um traço vermelho no chão
+      doc.setFillColor(...chartColor('red'));
+      doc.rect(x, plotBottom - 2.5, barWidth, 2.5, 'F');
+    } else if (bar.value > 0) {
+      doc.setFillColor(...chartColor(bar.tone));
+      doc.rect(x, yOf(bar.value), barWidth, plotBottom - yOf(bar.value), 'F');
+    }
+    if (bar.target) {
+      doc.setDrawColor(...COLORS.gray);
+      doc.setLineWidth(1);
+      doc.setLineDashPattern([2, 1.5], 0);
+      doc.line(x - 1.5, yOf(bar.target), x + barWidth + 1.5, yOf(bar.target));
+      doc.setLineDashPattern([], 0);
+    }
+    doc.setFontSize(6.5);
+    doc.setTextColor(...COLORS.textMuted);
+    doc.text(bar.label, x + barWidth / 2 - doc.getTextWidth(bar.label) / 2, plotBottom + 9);
+  });
+
+  // Legenda
+  let lx = plotX;
+  const ly = plotBottom + 22;
+  doc.setFontSize(7.5);
+  for (const item of chart.legend ?? []) {
+    if (item.tone === 'target') {
+      doc.setDrawColor(...COLORS.gray);
+      doc.setLineWidth(1);
+      doc.setLineDashPattern([2, 1.5], 0);
+      doc.line(lx, ly - 2.5, lx + 10, ly - 2.5);
+      doc.setLineDashPattern([], 0);
+    } else {
+      doc.setFillColor(...chartColor(item.tone));
+      doc.rect(lx, ly - 6, 8, 6, 'F');
+    }
+    doc.setTextColor(...COLORS.textMuted);
+    doc.text(item.label, lx + 13, ly);
+    lx += 13 + doc.getTextWidth(item.label) + 16;
+  }
+
+  return ly + 16;
 }
 
 /** Área para assinaturas no fim da seção. */
@@ -243,6 +341,10 @@ async function downloadPdf({ filename, title, subtitle, meta, sections }: Export
       y = drawHighlights(doc, pageWidth, y, s.highlights);
     }
 
+    if (s.chart?.bars.length) {
+      y = drawChart(doc, pageWidth, y, s.chart);
+    }
+
     autoTable(doc, {
       startY: y,
       head: [s.head],
@@ -267,10 +369,19 @@ async function downloadPdf({ filename, title, subtitle, meta, sections }: Export
       // Marca domingos/sábados com fundo mais claro (quando a primeira coluna começa com "dom"/"sáb")
       didParseCell: (data) => {
         if (data.section !== 'body') return;
-        const cell = data.row.cells[0];
-        const txt = String(cell?.text?.[0] ?? '').toLowerCase();
-        if (txt.includes('dom') || txt.includes('sáb')) {
+        // Fim de semana no espelho: a coluna "Dia" (a segunda) diz exatamente Sáb ou Dom
+        const weekday = String(data.row.cells[1]?.text?.[0] ?? '');
+        if (weekday === 'Sáb' || weekday === 'Dom') {
           data.cell.styles.fillColor = COLORS.weekend;
+        }
+        // Valores com sinal: + (extra) em verde, - (falta) em vermelho
+        const text = String(data.cell.text?.[0] ?? '');
+        if (/^\+\d/.test(text)) {
+          data.cell.styles.textColor = COLORS.green;
+          data.cell.styles.fontStyle = 'bold';
+        } else if (/^-\d/.test(text)) {
+          data.cell.styles.textColor = COLORS.red;
+          data.cell.styles.fontStyle = 'bold';
         }
       },
       margin,
@@ -308,8 +419,10 @@ async function downloadPdf({ filename, title, subtitle, meta, sections }: Export
         doc.setTextColor(...COLORS.textMuted);
         doc.text(label, boxX + 14, ry);
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(...COLORS.text);
         const valStr = String(value);
+        doc.setTextColor(
+          ...(/^\+\d/.test(valStr) ? COLORS.green : /^-\d/.test(valStr) ? COLORS.red : COLORS.text),
+        );
         doc.text(valStr, boxX + boxWidth - 14 - doc.getTextWidth(valStr), ry);
         ry += rowHeight;
       }

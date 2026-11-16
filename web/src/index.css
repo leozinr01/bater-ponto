@@ -210,6 +210,15 @@ input::-webkit-calendar-picker-indicator {
   table.print-timesheet .num {
     font-variant-numeric: tabular-nums;
   }
+  /* Hora extra (+) em verde e horas negativas (-) em vermelho */
+  table.print-timesheet td.positive {
+    color: #108050 !important;
+    font-weight: 600;
+  }
+  table.print-timesheet td.negative {
+    color: #b91c1c !important;
+    font-weight: 600;
+  }
   /* Resumo em caixa azul clara */
   .print-summary {
     background: #e8ecfa !important;

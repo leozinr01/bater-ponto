@@ -12,6 +12,12 @@ export function formatMinutes(minutes: number | null | undefined): string {
   return `${sign}${Math.floor(abs / 60)}:${pad(abs % 60)}`;
 }
 
+/** Saldo com sinal: 90 -> "+1:30", -45 -> "-0:45", 0 -> "0:00". null -> "–" */
+export function formatSigned(minutes: number | null | undefined): string {
+  if (minutes === null || minutes === undefined) return '–';
+  return `${minutes > 0 ? '+' : ''}${formatMinutes(minutes)}`;
+}
+
 /** 480 -> "8h", 525 -> "8h45" */
 export function formatDuration(minutes: number): string {
   const h = Math.floor(minutes / 60);

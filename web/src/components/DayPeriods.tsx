@@ -41,9 +41,18 @@ function TimeChip({
  * Períodos do dia como pares "entrada → saída".
  * Com `onEdit`, cada horário abre a correção.
  */
-export function PeriodPairs({ day, onEdit }: { day: TimesheetDay; onEdit?: (p: PunchRef) => void }) {
+export function PeriodPairs({
+  day,
+  onEdit,
+  inline,
+}: {
+  day: TimesheetDay;
+  onEdit?: (p: PunchRef) => void;
+  /** Pares lado a lado (quebrando linha só se não couber), em vez de um embaixo do outro. */
+  inline?: boolean;
+}) {
   return (
-    <div className="flex flex-col items-start gap-1">
+    <div className={cn('flex gap-1', inline ? 'flex-row flex-wrap items-center' : 'flex-col items-start')}>
       {day.periods.map((p) => (
         <span
           key={p.start}
