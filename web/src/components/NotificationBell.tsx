@@ -1,6 +1,6 @@
-import { Bell, BellRing } from 'lucide-react';
+import { ArrowRight, Bell, BellRing, MailOpen } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { playChime, useNotifications, type AppNotification } from '../lib/notifications';
 import { useToast } from './toast';
 import { Button, cn, Modal } from './ui';
@@ -23,39 +23,107 @@ const dot: Record<AppNotification['tone'], string> = {
   red: 'bg-red-400',
 };
 
-/** Lista de avisos não lidos: tocar num aviso abre a tela dele e o marca como lido. */
-function NotificationList({ items, onOpen }: { items: AppNotification[]; onOpen: (n: AppNotification) => void }) {
+/** Rótulo do botão que leva à tela do aviso. */
+function goLabel(to: string) {
+  if (to.startsWith('/registros')) return 'Ver registros';
+  if (to.startsWith('/admin/hoje')) return 'Abrir o painel Hoje';
+  if (to === '/') return 'Ir para Bater ponto';
+  return 'Abrir';
+}
+
+/**
+ * Lista de avisos: os não lidos coloridos e em destaque, os lidos em cinza.
+ * Tocar num aviso abre a mensagem (e o marca como lido).
+ */
+function NotificationList({
+  items,
+  isRead,
+  onOpen,
+  empty = 'Nenhum aviso no momento.',
+}: {
+  items: AppNotification[];
+  isRead: (n: AppNotification) => boolean;
+  onOpen: (n: AppNotification) => void;
+  empty?: string;
+}) {
   if (!items.length) {
-    return <p className="px-4 py-6 text-center text-sm text-slate-500">Nenhum aviso pendente.</p>;
+    return <p className="px-4 py-6 text-center text-sm text-slate-500">{empty}</p>;
   }
   return (
     <ul className="divide-y divide-white/[0.06]">
-      {items.map((n) => (
-        <li key={n.id}>
-          <Link
-            to={n.to}
-            onClick={() => onOpen(n)}
-            className="group flex gap-3 px-4 py-3 text-left transition-colors hover:bg-white/[0.04]"
-          >
-            <span className={cn('mt-1.5 size-2 shrink-0 rounded-full', dot[n.tone])} />
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-medium text-white">{n.title}</span>
-              <span className="block text-xs text-slate-400">{n.text}</span>
-            </span>
-            <span className="self-center text-[11px] font-medium text-brand-300 opacity-0 transition-opacity group-hover:opacity-100">
-              Abrir
-            </span>
-          </Link>
-        </li>
-      ))}
+      {items.map((n) => {
+        const read = isRead(n);
+        return (
+          <li key={n.id}>
+            <button
+              type="button"
+              onClick={() => onOpen(n)}
+              className={cn(
+                'flex w-full gap-3 px-4 py-3 text-left transition-colors hover:bg-white/[0.04]',
+                !read && 'bg-brand-500/[0.06]',
+              )}
+            >
+              <span className={cn('mt-1.5 size-2 shrink-0 rounded-full', read ? 'bg-slate-600' : dot[n.tone])} />
+              <span className="min-w-0 flex-1">
+                <span className={cn('block text-sm', read ? 'text-slate-400' : 'font-semibold text-white')}>
+                  {n.title}
+                </span>
+                <span className={cn('block truncate text-xs', read ? 'text-slate-600' : 'text-slate-400')}>
+                  {n.text}
+                </span>
+              </span>
+              {read && <span className="self-center text-[10px] text-slate-600">lido</span>}
+            </button>
+          </li>
+        );
+      })}
     </ul>
   );
 }
 
-/** Sininho com o número de avisos não lidos (em vermelho) e a lista deles ao tocar. */
+/** Caixinha com a mensagem do aviso aberto e um atalho para a tela dele. */
+function NotificationMessage({ notification, onClose }: { notification: AppNotification | null; onClose: () => void }) {
+  const navigate = useNavigate();
+  return (
+    <Modal
+      open={!!notification}
+      onClose={onClose}
+      icon={MailOpen}
+      title={notification?.title ?? ''}
+      footer={
+        notification && (
+          <>
+            <Button variant="secondary" onClick={onClose}>
+              Fechar
+            </Button>
+            <Button
+              icon={ArrowRight}
+              onClick={() => {
+                onClose();
+                navigate(notification.to);
+              }}
+            >
+              {goLabel(notification.to)}
+            </Button>
+          </>
+        )
+      }
+    >
+      {notification && (
+        <div className="flex gap-3 rounded-xl bg-white/[0.03] p-4 ring-1 ring-white/[0.06]">
+          <span className={cn('mt-1.5 size-2 shrink-0 rounded-full', dot[notification.tone])} />
+          <p className="text-sm leading-relaxed text-slate-200">{notification.text}</p>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+/** Sininho com o número de avisos não lidos (em vermelho) e a lista ao tocar. */
 export function NotificationBell({ align = 'right' }: { align?: 'left' | 'right' }) {
-  const { unread, markRead, markAllRead } = useNotifications();
+  const { items, unread, markRead, markAllRead } = useNotifications();
   const [open, setOpen] = useState(false);
+  const [message, setMessage] = useState<AppNotification | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
   // Fecha a lista ao tocar fora ou apertar Esc
@@ -73,15 +141,22 @@ export function NotificationBell({ align = 'right' }: { align?: 'left' | 'right'
     };
   }, [open]);
 
-  // Abrir o sininho não marca nada como lido: cada aviso sai da lista quando é aberto
-  const toggle = () => setOpen((o) => !o);
   const count = unread.length;
+  const unreadIds = new Set(unread.map((n) => n.id));
+  // Não lidos primeiro; os lidos ficam embaixo, em cinza
+  const sorted = [...items].sort((a, b) => Number(!unreadIds.has(a.id)) - Number(!unreadIds.has(b.id)));
+
+  const openMessage = (n: AppNotification) => {
+    markRead([n.id]);
+    setOpen(false);
+    setMessage(n);
+  };
 
   return (
     <div ref={ref} className="relative">
       <button
         type="button"
-        onClick={toggle}
+        onClick={() => setOpen((o) => !o)}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={count ? `Avisos: ${count} não lido(s)` : 'Avisos'}
@@ -106,7 +181,8 @@ export function NotificationBell({ align = 'right' }: { align?: 'left' | 'right'
         >
           <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3">
             <p className="text-sm font-semibold text-white">
-              Avisos{count > 0 && <span className="ml-1 font-normal text-slate-500">· {count}</span>}
+              Avisos
+              {count > 0 && <span className="ml-1 font-normal text-slate-500">· {count} não lido(s)</span>}
             </p>
             {count > 0 && (
               <button
@@ -119,16 +195,12 @@ export function NotificationBell({ align = 'right' }: { align?: 'left' | 'right'
             )}
           </div>
           <div className="max-h-[60vh] overflow-y-auto">
-            <NotificationList
-              items={unread}
-              onOpen={(n) => {
-                markRead([n.id]);
-                setOpen(false);
-              }}
-            />
+            <NotificationList items={sorted} isRead={(n) => !unreadIds.has(n.id)} onOpen={openMessage} />
           </div>
         </div>
       )}
+
+      <NotificationMessage notification={message} onClose={() => setMessage(null)} />
     </div>
   );
 }
@@ -143,8 +215,8 @@ export function NotificationBell({ align = 'right' }: { align?: 'left' | 'right'
 export function NotificationAlerts() {
   const { items, unread, notAlerted, markRead, markAlerted, ready } = useNotifications();
   const [shown, setShown] = useState<AppNotification[]>([]);
+  const [message, setMessage] = useState<AppNotification | null>(null);
   const toast = useToast();
-  const navigate = useNavigate();
   const known = useRef<Set<string> | null>(null);
 
   useEffect(() => {
@@ -182,40 +254,34 @@ export function NotificationAlerts() {
   // Só os que continuam não lidos (abrir um pelo sininho também o tira daqui)
   const pending = shown.filter((n) => unread.some((u) => u.id === n.id));
   const close = () => setShown([]);
-  const open = (n: AppNotification) => {
+  const openMessage = (n: AppNotification) => {
     markRead([n.id]);
     close();
+    setMessage(n);
   };
 
   return (
-    <Modal
-      open={pending.length > 0}
-      onClose={close}
-      icon={BellRing}
-      title={pending.length === 1 ? 'Você tem 1 aviso' : `Você tem ${pending.length} avisos`}
-      description="Toque num aviso para abrir. Os que ficarem para depois continuam no sininho."
-      footer={
-        <>
-          <Button variant="secondary" onClick={close}>
-            Ver depois
-          </Button>
-          {pending[0] && (
-            <Button
-              onClick={() => {
-                const first = pending[0];
-                open(first);
-                navigate(first.to);
-              }}
-            >
-              Abrir o primeiro
+    <>
+      <Modal
+        open={pending.length > 0 && !message}
+        onClose={close}
+        icon={BellRing}
+        title={pending.length === 1 ? 'Você tem 1 aviso' : `Você tem ${pending.length} avisos`}
+        description="Toque num aviso para ler. Os que ficarem para depois continuam no sininho."
+        footer={
+          <>
+            <Button variant="secondary" onClick={close}>
+              Ver depois
             </Button>
-          )}
-        </>
-      }
-    >
-      <div className="overflow-hidden rounded-xl ring-1 ring-white/[0.06]">
-        <NotificationList items={pending} onOpen={open} />
-      </div>
-    </Modal>
+            {pending[0] && <Button onClick={() => openMessage(pending[0])}>Ler o primeiro</Button>}
+          </>
+        }
+      >
+        <div className="overflow-hidden rounded-xl ring-1 ring-white/[0.06]">
+          <NotificationList items={pending} isRead={() => false} onOpen={openMessage} />
+        </div>
+      </Modal>
+      <NotificationMessage notification={message} onClose={() => setMessage(null)} />
+    </>
   );
 }
