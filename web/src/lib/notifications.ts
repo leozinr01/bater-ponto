@@ -10,8 +10,12 @@ import type { Timesheet, TodayOverview } from './types';
 const ENTRY_WINDOW_MINUTES = 120;
 /** Faltas mais antigas que isso não viram aviso (já estão nos Registros). */
 const ABSENCE_LOOKBACK_DAYS = 7;
-const SEEN_KEY = 'ponto.avisos-vistos';
-const SEEN_EVENT = 'ponto:avisos-vistos';
+/** Avisos lidos (abertos ou marcados) e avisos já mostrados no alerta de entrada, por usuário. */
+const READ_KEY = 'ponto.avisos-lidos';
+const ALERTED_KEY = 'ponto.avisos-alertados';
+const CHANGED_EVENT = 'ponto:avisos-lidos';
+/** Lidos mais antigos que isso saem do armazenamento (o aviso já não existe mais). */
+const KEEP_DAYS = 45;
 
 export type NotificationTone = 'brand' | 'amber' | 'red';
 
@@ -40,7 +44,7 @@ export function ownNotifications(sheet: Timesheet, now: Date, pendingOffline: nu
 
   if (pendingOffline > 0) {
     list.push({
-      id: `offline-${pendingOffline}`,
+      id: `offline-${date}`,
       tone: 'amber',
       title: 'Batida aguardando internet',
       text:
@@ -108,32 +112,27 @@ export function ownNotifications(sheet: Timesheet, now: Date, pendingOffline: nu
 /** Avisos do administrador a partir do painel do dia. */
 export function adminNotifications(overview: TodayOverview): AppNotification[] {
   const list: AppNotification[] = [];
-  const late = overview.employees.filter((e) => e.status === 'late');
-  if (late.length) {
+  // Um aviso por pessoa: ler o atraso de uma não esconde o de quem se atrasar depois
+  for (const e of overview.employees.filter((e) => e.status === 'late')) {
     list.push({
-      id: `atrasados-${overview.date}-${late.map((e) => e.employee.id).join(',')}`,
+      id: `atraso-${overview.date}-${e.employee.id}`,
       tone: 'red',
-      title: late.length === 1 ? '1 funcionário atrasado' : `${late.length} funcionários atrasados`,
-      text: late
-        .map((e) => e.employee.name.split(' ')[0])
-        .slice(0, 5)
-        .join(', ')
-        .concat(late.length > 5 ? '…' : ''),
+      title: `${e.employee.name.split(' ')[0]} está atrasado(a)`,
+      text: e.expectedStart
+        ? `Entrada prevista às ${e.expectedStart} e ainda sem marcação hoje.`
+        : 'Ainda sem marcação hoje.',
       to: '/admin/hoje',
     });
   }
-  const outside = overview.employees.filter((e) => e.outsideLocationPunches > 0);
-  if (outside.length) {
-    const total = outside.reduce((sum, e) => sum + e.outsideLocationPunches, 0);
+  // Por pessoa e quantidade: uma nova batida fora do local volta a avisar
+  for (const e of overview.employees.filter((e) => e.outsideLocationPunches > 0)) {
+    const times = e.outsideLocationTimes.join(', ');
     list.push({
-      id: `fora-${overview.date}-${total}`,
+      id: `fora-${overview.date}-${e.employee.id}-${e.outsideLocationPunches}`,
       tone: 'amber',
-      title: total === 1 ? '1 batida fora do local' : `${total} batidas fora do local`,
-      text: outside
-        .map((e) => e.employee.name.split(' ')[0])
-        .slice(0, 5)
-        .join(', '),
-      to: '/admin/hoje',
+      title: `Batida fora do local: ${e.employee.name.split(' ')[0]}`,
+      text: times ? `Marcação longe dos locais de trabalho às ${times}.` : 'Marcação longe dos locais de trabalho.',
+      to: `/registros?funcionario=${e.employee.id}`,
     });
   }
   // O horário da batida offline vem do celular: o admin confere se faz sentido
@@ -149,26 +148,52 @@ export function adminNotifications(overview: TodayOverview): AppNotification[] {
   return list;
 }
 
-function readSeen(): string[] {
+type Marks = Record<string, number>;
+
+function readMarks(key: string): Marks {
   try {
-    return JSON.parse(localStorage.getItem(SEEN_KEY) ?? '[]') as string[];
+    const parsed = JSON.parse(localStorage.getItem(key) ?? '{}');
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Marks) : {};
   } catch {
-    return [];
+    return {};
   }
 }
 
 /**
+ * Acrescenta ids às marcas (nunca apaga os que não estão na tela agora: um aviso que some
+ * por um instante, como numa recarga dos dados, não pode voltar como novo) e descarta os antigos.
+ */
+function addMarks(key: string, ids: string[]) {
+  const marks = readMarks(key);
+  const now = Date.now();
+  for (const id of ids) marks[id] ??= now;
+  const limit = now - KEEP_DAYS * 86_400_000;
+  for (const [id, at] of Object.entries(marks)) if (at < limit) delete marks[id];
+  try {
+    localStorage.setItem(key, JSON.stringify(marks));
+  } catch {
+    // sem armazenamento: vale só enquanto a página estiver aberta
+  }
+  window.dispatchEvent(new Event(CHANGED_EVENT));
+  return marks;
+}
+
+/**
  * Avisos do usuário logado, gerados a partir dos dados do site (nada fica guardado no servidor).
- * `unseen` são os que ainda não foram vistos neste aparelho; `markAllSeen` zera o contador.
+ * `unread` são os ainda não lidos neste aparelho por este usuário: abrir um aviso (`markRead`)
+ * o tira da lista de vez. `notAlerted` são os não lidos que o alerta de entrada ainda não mostrou.
  */
 export function useNotifications() {
-  const { isAdmin } = useAuth();
+  const { user, isAdmin } = useAuth();
   const now = useServerNow(30_000);
   const { from } = monthRange(currentMonth());
   const sheet = useTimesheet({ from, to: today() });
   const overview = useToday(isAdmin);
   const pending = usePendingPunches();
-  const [seen, setSeen] = useState<string[]>(readSeen);
+  const readKey = `${READ_KEY}.${user?.id ?? ''}`;
+  const alertedKey = `${ALERTED_KEY}.${user?.id ?? ''}`;
+  const [read, setRead] = useState<Marks>(() => readMarks(readKey));
+  const [alerted, setAlerted] = useState<Marks>(() => readMarks(alertedKey));
 
   const items = useMemo(
     () => [
@@ -177,34 +202,31 @@ export function useNotifications() {
     ],
     [sheet.data, overview.data, isAdmin, now, pending.length],
   );
-  const unseen = items.filter((n) => !seen.includes(n.id));
+  const unread = items.filter((n) => !(n.id in read));
+  const notAlerted = unread.filter((n) => !(n.id in alerted));
 
-  // Outro sininho desta tela (ou outra aba) marcou como visto
+  // Outro sininho desta tela (ou outra aba) marcou como lido; ou trocou o usuário
   useEffect(() => {
-    const sync = () => setSeen(readSeen());
-    const onStorage = (e: StorageEvent) => e.key === SEEN_KEY && sync();
+    const sync = () => {
+      setRead(readMarks(readKey));
+      setAlerted(readMarks(alertedKey));
+    };
+    sync();
+    const onStorage = (e: StorageEvent) => (e.key === readKey || e.key === alertedKey) && sync();
     window.addEventListener('storage', onStorage);
-    window.addEventListener(SEEN_EVENT, sync);
+    window.addEventListener(CHANGED_EVENT, sync);
     return () => {
       window.removeEventListener('storage', onStorage);
-      window.removeEventListener(SEEN_EVENT, sync);
+      window.removeEventListener(CHANGED_EVENT, sync);
     };
-  }, []);
+  }, [readKey, alertedKey]);
 
-  const markAllSeen = useCallback(() => {
-    // Guarda só os atuais: avisos que sumiram não precisam ficar no armazenamento
-    const ids = items.map((n) => n.id);
-    setSeen(ids);
-    try {
-      localStorage.setItem(SEEN_KEY, JSON.stringify(ids));
-    } catch {
-      // sem armazenamento: vale só nesta aba
-    }
-    window.dispatchEvent(new Event(SEEN_EVENT));
-  }, [items]);
+  const markRead = useCallback((ids: string[]) => setRead(addMarks(readKey, ids)), [readKey]);
+  const markAllRead = useCallback(() => setRead(addMarks(readKey, items.map((n) => n.id))), [readKey, items]);
+  const markAlerted = useCallback((ids: string[]) => setAlerted(addMarks(alertedKey, ids)), [alertedKey]);
 
   const ready = sheet.isSuccess && (!isAdmin || overview.isSuccess);
-  return { items, unseen, markAllSeen, ready };
+  return { items, unread, notAlerted, markRead, markAllRead, markAlerted, ready };
 }
 
 /** Som curto de aviso (dois tons), sem arquivo de áudio. Silencioso se o navegador bloquear. */

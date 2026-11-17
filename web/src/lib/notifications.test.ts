@@ -75,7 +75,9 @@ describe('ownNotifications', () => {
   it('não avisa a entrada em feriado nem com batida guardada offline', () => {
     const holiday = day({ date: '2026-11-10', holiday: 'Feriado', scheduled: false });
     expect(ownNotifications(sheet([holiday]), NOW, 0)).toEqual([]);
-    expect(ids(ownNotifications(sheet([]), NOW, 1))).toEqual(['offline-1']);
+    // Id por dia: guardar mais uma batida offline não faz o aviso já lido voltar como novo
+    expect(ids(ownNotifications(sheet([]), NOW, 1))).toEqual(['offline-2026-11-10']);
+    expect(ids(ownNotifications(sheet([]), NOW, 2))).toEqual(['offline-2026-11-10']);
   });
 
   it('avisa a saída quando a carga do dia foi cumprida', () => {
@@ -108,18 +110,47 @@ describe('ownNotifications', () => {
 });
 
 describe('adminNotifications', () => {
-  it('conta atrasados e batidas fora do local', () => {
+  it('um aviso por pessoa atrasada ou com batida fora do local, com id estável', () => {
     const overview = {
       date: '2026-11-10',
       employees: [
-        { employee: { id: 'a', name: 'Ana Souza' }, status: 'late', outsideLocationPunches: 0 },
-        { employee: { id: 'b', name: 'Bruno Lima' }, status: 'working', outsideLocationPunches: 2 },
-        { employee: { id: 'c', name: 'Carla' }, status: 'working', outsideLocationPunches: 0 },
+        {
+          employee: { id: 'a', name: 'Ana Souza' },
+          status: 'late',
+          expectedStart: '08:00',
+          outsideLocationPunches: 0,
+          outsideLocationTimes: [],
+        },
+        {
+          employee: { id: 'b', name: 'Bruno Lima' },
+          status: 'working',
+          expectedStart: '08:00',
+          outsideLocationPunches: 2,
+          outsideLocationTimes: ['08:02', '12:01'],
+        },
+        {
+          employee: { id: 'c', name: 'Carla' },
+          status: 'working',
+          expectedStart: '08:00',
+          outsideLocationPunches: 0,
+          outsideLocationTimes: [],
+        },
       ],
     } as unknown as TodayOverview;
     const list = adminNotifications(overview);
-    expect(list.map((n) => n.title)).toEqual(['1 funcionário atrasado', '2 batidas fora do local']);
-    expect(list[0].text).toBe('Ana');
+    expect(list.map((n) => [n.id, n.title])).toEqual([
+      ['atraso-2026-11-10-a', 'Ana está atrasado(a)'],
+      ['fora-2026-11-10-b-2', 'Batida fora do local: Bruno'],
+    ]);
+    expect(list[1].text).toContain('às 08:02, 12:01');
+
+    // Outra pessoa se atrasando não muda o aviso da Ana: o que ela já leu continua lido
+    const later = adminNotifications({
+      ...overview,
+      employees: overview.employees.map((e) => (e.employee.id === 'c' ? { ...e, status: 'late' } : e)),
+    } as TodayOverview);
+    expect(later.map((n) => n.id)).toContain('atraso-2026-11-10-a');
+    expect(later.map((n) => n.id)).toContain('atraso-2026-11-10-c');
   });
 
   it('avisa cada batida offline, que tem o horário informado pelo celular', () => {

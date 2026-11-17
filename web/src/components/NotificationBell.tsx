@@ -23,19 +23,27 @@ const dot: Record<AppNotification['tone'], string> = {
   red: 'bg-red-400',
 };
 
-function NotificationList({ items, onPick }: { items: AppNotification[]; onPick: () => void }) {
+/** Lista de avisos não lidos: tocar num aviso abre a tela dele e o marca como lido. */
+function NotificationList({ items, onOpen }: { items: AppNotification[]; onOpen: (n: AppNotification) => void }) {
   if (!items.length) {
-    return <p className="px-4 py-6 text-center text-sm text-slate-500">Nenhum aviso no momento.</p>;
+    return <p className="px-4 py-6 text-center text-sm text-slate-500">Nenhum aviso pendente.</p>;
   }
   return (
     <ul className="divide-y divide-white/[0.06]">
       {items.map((n) => (
         <li key={n.id}>
-          <Link to={n.to} onClick={onPick} className="flex gap-3 px-4 py-3 text-left transition-colors hover:bg-white/[0.04]">
+          <Link
+            to={n.to}
+            onClick={() => onOpen(n)}
+            className="group flex gap-3 px-4 py-3 text-left transition-colors hover:bg-white/[0.04]"
+          >
             <span className={cn('mt-1.5 size-2 shrink-0 rounded-full', dot[n.tone])} />
-            <span className="min-w-0">
+            <span className="min-w-0 flex-1">
               <span className="block text-sm font-medium text-white">{n.title}</span>
               <span className="block text-xs text-slate-400">{n.text}</span>
+            </span>
+            <span className="self-center text-[11px] font-medium text-brand-300 opacity-0 transition-opacity group-hover:opacity-100">
+              Abrir
             </span>
           </Link>
         </li>
@@ -44,9 +52,9 @@ function NotificationList({ items, onPick }: { items: AppNotification[]; onPick:
   );
 }
 
-/** Sininho com o número de avisos não vistos (em vermelho) e a lista ao tocar. */
+/** Sininho com o número de avisos não lidos (em vermelho) e a lista deles ao tocar. */
 export function NotificationBell({ align = 'right' }: { align?: 'left' | 'right' }) {
-  const { items, unseen, markAllSeen } = useNotifications();
+  const { unread, markRead, markAllRead } = useNotifications();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -65,11 +73,9 @@ export function NotificationBell({ align = 'right' }: { align?: 'left' | 'right'
     };
   }, [open]);
 
-  const toggle = () => {
-    if (!open) markAllSeen();
-    setOpen((o) => !o);
-  };
-  const count = unseen.length;
+  // Abrir o sininho não marca nada como lido: cada aviso sai da lista quando é aberto
+  const toggle = () => setOpen((o) => !o);
+  const count = unread.length;
 
   return (
     <div ref={ref} className="relative">
@@ -78,7 +84,7 @@ export function NotificationBell({ align = 'right' }: { align?: 'left' | 'right'
         onClick={toggle}
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label={count ? `Avisos: ${count} novo(s)` : 'Avisos'}
+        aria-label={count ? `Avisos: ${count} não lido(s)` : 'Avisos'}
         className="relative flex size-10 items-center justify-center rounded-xl text-slate-300 transition-colors hover:bg-white/[0.06] hover:text-white"
       >
         {count ? <BellRing className="size-5" /> : <Bell className="size-5" />}
@@ -98,9 +104,28 @@ export function NotificationBell({ align = 'right' }: { align?: 'left' | 'right'
             align === 'right' ? 'right-0' : 'left-0',
           )}
         >
-          <p className="border-b border-white/[0.06] px-4 py-3 text-sm font-semibold text-white">Avisos</p>
+          <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3">
+            <p className="text-sm font-semibold text-white">
+              Avisos{count > 0 && <span className="ml-1 font-normal text-slate-500">· {count}</span>}
+            </p>
+            {count > 0 && (
+              <button
+                type="button"
+                onClick={markAllRead}
+                className="text-xs font-medium text-brand-300 transition-colors hover:text-brand-200"
+              >
+                Marcar todos como lidos
+              </button>
+            )}
+          </div>
           <div className="max-h-[60vh] overflow-y-auto">
-            <NotificationList items={items} onPick={() => setOpen(false)} />
+            <NotificationList
+              items={unread}
+              onOpen={(n) => {
+                markRead([n.id]);
+                setOpen(false);
+              }}
+            />
           </div>
         </div>
       )}
@@ -110,12 +135,14 @@ export function NotificationBell({ align = 'right' }: { align?: 'left' | 'right'
 
 /**
  * Alertas dos avisos (monte uma vez só, no layout):
- * - ao entrar (depois do login ou na primeira abertura do dia), uma janela com os avisos não vistos e um som;
+ * - ao entrar (depois do login ou na primeira abertura do dia), uma janela com os avisos não lidos
+ *   que ainda não foram mostrados, e um som. Fechar não marca como lido: eles seguem no sininho,
+ *   mas não reaparecem nesta janela;
  * - com o site aberto, quando surge um aviso novo (ex.: chegou a hora da entrada), som e mensagem rápida.
  */
 export function NotificationAlerts() {
-  const { items, unseen, markAllSeen, ready } = useNotifications();
-  const [alertOpen, setAlertOpen] = useState(false);
+  const { items, unread, notAlerted, markRead, markAlerted, ready } = useNotifications();
+  const [shown, setShown] = useState<AppNotification[]>([]);
   const toast = useToast();
   const navigate = useNavigate();
   const known = useRef<Set<string> | null>(null);
@@ -135,54 +162,59 @@ export function NotificationAlerts() {
       } catch {
         // sem armazenamento: não mostra
       }
-      if (show && unseen.length) {
-        setAlertOpen(true);
+      if (show && notAlerted.length) {
+        setShown(notAlerted);
+        markAlerted(notAlerted.map((n) => n.id));
         playChime();
       }
       return;
     }
 
-    // Depois: aviso que não existia antes e ainda não foi visto
-    const fresh = unseen.filter((n) => !known.current!.has(n.id));
+    // Depois: aviso que não existia antes e ainda não foi lido
+    const fresh = unread.filter((n) => !known.current!.has(n.id));
     for (const n of items) known.current.add(n.id);
     if (fresh.length) {
       playChime();
       toast(fresh[0].title + (fresh.length > 1 ? ` (+${fresh.length - 1})` : ''));
     }
-  }, [ready, items, unseen, toast]);
+  }, [ready, items, unread, notAlerted, markAlerted, toast]);
 
-  const close = () => {
-    setAlertOpen(false);
-    markAllSeen();
+  // Só os que continuam não lidos (abrir um pelo sininho também o tira daqui)
+  const pending = shown.filter((n) => unread.some((u) => u.id === n.id));
+  const close = () => setShown([]);
+  const open = (n: AppNotification) => {
+    markRead([n.id]);
+    close();
   };
 
   return (
     <Modal
-      open={alertOpen}
+      open={pending.length > 0}
       onClose={close}
       icon={BellRing}
-      title={unseen.length === 1 ? 'Você tem 1 aviso' : `Você tem ${unseen.length} avisos`}
+      title={pending.length === 1 ? 'Você tem 1 aviso' : `Você tem ${pending.length} avisos`}
+      description="Toque num aviso para abrir. Os que ficarem para depois continuam no sininho."
       footer={
         <>
           <Button variant="secondary" onClick={close}>
-            Fechar
+            Ver depois
           </Button>
-          {unseen[0] && (
+          {pending[0] && (
             <Button
               onClick={() => {
-                const to = unseen[0].to;
-                close();
-                navigate(to);
+                const first = pending[0];
+                open(first);
+                navigate(first.to);
               }}
             >
-              Ver
+              Abrir o primeiro
             </Button>
           )}
         </>
       }
     >
       <div className="overflow-hidden rounded-xl ring-1 ring-white/[0.06]">
-        <NotificationList items={unseen} onPick={close} />
+        <NotificationList items={pending} onOpen={open} />
       </div>
     </Modal>
   );
