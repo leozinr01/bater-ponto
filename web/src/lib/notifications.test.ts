@@ -49,7 +49,8 @@ const sheet = (days: TimesheetDay[]): Timesheet =>
     totals: {} as Timesheet['totals'],
   }) as Timesheet;
 
-const ids = (list: { id: string }[]) => list.map((n) => n.id);
+// Os testes de cada regra ignoram as confirmações de batida (informativas), testadas à parte
+const ids = (list: { id: string; quiet?: boolean }[]) => list.filter((n) => !n.quiet).map((n) => n.id);
 
 describe('ownNotifications', () => {
   beforeEach(() => {
@@ -106,6 +107,48 @@ describe('ownNotifications', () => {
       0,
     );
     expect(ids(list)).toEqual(['falta-2026-11-06', 'incompleto-2026-11-05']);
+  });
+});
+
+describe('confirmação de batida', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const punch = (id: string, localTime: string, offline = false) => ({
+    id,
+    timestamp: localTime,
+    localTime,
+    locationStatus: null,
+    offline,
+  });
+
+  it('avisa cada entrada e saída de hoje e de ontem, sem som nem alerta de entrada', () => {
+    const list = ownNotifications(
+      sheet([
+        day({ date: '2026-11-08', punches: [punch('velha', '2026-11-08T08:00:00-03:00')] }),
+        day({
+          date: '2026-11-09',
+          punches: [punch('e1', '2026-11-09T08:00:00-03:00'), punch('s1', '2026-11-09T17:00:00-03:00')],
+        }),
+        day({ date: '2026-11-10', punches: [punch('e2', '2026-11-10T08:02:00-03:00', true)] }),
+      ]),
+      NOW,
+      0,
+    ).filter((n) => n.id.startsWith('batida-'));
+
+    // Mais recente primeiro; a de anteontem não entra
+    expect(list.map((n) => [n.id, n.title])).toEqual([
+      ['batida-e2', 'Entrada registrada'],
+      ['batida-s1', 'Saída registrada'],
+      ['batida-e1', 'Entrada registrada'],
+    ]);
+    expect(list.every((n) => n.quiet)).toBe(true);
+    expect(list[0].text).toBe(
+      'Sua batida de entrada das 08:02 de 10/11 foi registrada (feita sem internet, com o horário do celular).',
+    );
   });
 });
 

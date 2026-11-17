@@ -27,6 +27,8 @@ export interface AppNotification {
   text: string;
   /** Tela que resolve o aviso. */
   to: string;
+  /** Só informa (ex.: batida registrada): conta no sininho, mas não toca som nem abre o alerta de entrada. */
+  quiet?: boolean;
 }
 
 const toMinutes = (hhmm: string) => {
@@ -52,6 +54,21 @@ export function ownNotifications(sheet: Timesheet, now: Date, pendingOffline: nu
           ? '1 batida foi guardada sem internet e será enviada quando a conexão voltar.'
           : `${pendingOffline} batidas foram guardadas sem internet e serão enviadas quando a conexão voltar.`,
       to: '/',
+    });
+  }
+
+  // Confirmação de cada batida de hoje e de ontem, da mais recente para a mais antiga.
+  // Na ordem do dia, as batidas alternam entrada e saída (1ª entrada, 2ª saída...)
+  const recent = sheet.days.filter((d) => d.date === date || d.date === addDays(date, -1));
+  const punches = recent.flatMap((d) => d.punches.map((p, i) => ({ p, entry: i % 2 === 0, day: d.date })));
+  for (const { p, entry, day: punchDay } of punches.reverse()) {
+    list.push({
+      id: `batida-${p.id}`,
+      tone: 'brand',
+      quiet: true,
+      title: entry ? 'Entrada registrada' : 'Saída registrada',
+      text: `Sua batida ${entry ? 'de entrada' : 'de saída'} das ${timeOf(p.localTime)} de ${formatDate(dateOf(p.localTime), false)} foi registrada${p.offline ? ' (feita sem internet, com o horário do celular)' : ''}.`,
+      to: `/registros?mes=${punchDay.slice(0, 7)}`,
     });
   }
 
@@ -203,7 +220,8 @@ export function useNotifications() {
     [sheet.data, overview.data, isAdmin, now, pending.length],
   );
   const unread = items.filter((n) => !(n.id in read));
-  const notAlerted = unread.filter((n) => !(n.id in alerted));
+  // Avisos só informativos (batida registrada) não abrem o alerta de entrada
+  const notAlerted = unread.filter((n) => !n.quiet && !(n.id in alerted));
 
   // Outro sininho desta tela (ou outra aba) marcou como lido; ou trocou o usuário
   useEffect(() => {

@@ -242,8 +242,9 @@ export function NotificationAlerts() {
       return;
     }
 
-    // Depois: aviso que não existia antes e ainda não foi lido
-    const fresh = unread.filter((n) => !known.current!.has(n.id));
+    // Depois: aviso que não existia antes e ainda não foi lido (a confirmação de batida só vai para o sininho:
+    // a tela de ponto já mostra a confirmação na hora)
+    const fresh = unread.filter((n) => !n.quiet && !known.current!.has(n.id));
     for (const n of items) known.current.add(n.id);
     if (fresh.length) {
       playChime();
