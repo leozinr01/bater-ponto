@@ -15,7 +15,6 @@ import {
   formatDate,
   formatMinutes,
   formatSigned,
-  monthRange,
   timeOf,
   today,
   WEEKDAYS,
@@ -64,8 +63,8 @@ function WeekSummary({ days, todayDate }: { days: TimesheetDay[]; todayDate: str
     if (!days.some((d) => d.scheduled || d.status === 'absent')) return null;
     const sunday = addDays(days[0].date, (7 - days[0].weekday) % 7);
     if (sunday < todayDate) {
-      // Semana que termina no mês seguinte: o saldo sai no espelho de lá
-      return <span className="text-slate-500 normal-case">Saldo no espelho do mês seguinte</span>;
+      // Semana que termina depois do período: o saldo sai no período seguinte
+      return <span className="text-slate-500 normal-case">Saldo no período seguinte</span>;
     }
     const worked = days.filter((d) => d.scheduled).reduce((sum, d) => sum + d.workedMinutes, 0);
     return (
@@ -406,9 +405,8 @@ function PrintFooter({ totals }: { totals: Timesheet['totals'] }) {
   );
 }
 
-export function DaysView({ employeeId, month }: { employeeId: string; month: string }) {
+export function DaysView({ employeeId, from, to }: { employeeId: string; from: string; to: string }) {
   const { user, isAdmin } = useAuth();
-  const { from, to } = monthRange(month);
   const sheet = useTimesheet({ employeeId: employeeId || undefined, from, to });
   const bank = useHourBank({ employeeId: employeeId || undefined });
   const data = sheet.data;
@@ -466,7 +464,7 @@ export function DaysView({ employeeId, month }: { employeeId: string; month: str
         </div>
       </div>
 
-      {/* Resumo do mês e gráfico de horas por dia */}
+      {/* Resumo do período e gráfico de horas por dia */}
       <Card className="overflow-hidden print:hidden">
         {/* As divisórias são o fundo aparecendo entre os quadros (gap-px), em 2 ou 5 colunas */}
         <div className="grid grid-cols-2 gap-px bg-white/[0.06] sm:grid-cols-5 [&>*]:bg-ink-850 [&>*:last-child]:max-sm:col-span-2">
@@ -475,7 +473,7 @@ export function DaysView({ employeeId, month }: { employeeId: string; month: str
             value={formatMinutes(totals.workedMinutes)}
             hint={totals.expectedMinutes !== null ? `de ${formatMinutes(totals.expectedMinutes)} previstas` : undefined}
           />
-          <Stat label="Saldo do mês" value={<Signed minutes={balance} />} />
+          <Stat label="Saldo do período" value={<Signed minutes={balance} />} />
           <Stat
             label="Hora extra"
             value={<Signed minutes={totals.overtimeMinutes} />}
@@ -521,7 +519,7 @@ export function DaysView({ employeeId, month }: { employeeId: string; month: str
 
       <AbsencesCard employeeId={employeeId || undefined} from={from} to={to} canManage={canCorrect} />
 
-      {/* Folha de ponto do mês */}
+      {/* Folha de ponto do período */}
       <div className="print:hidden">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -550,10 +548,10 @@ export function DaysView({ employeeId, month }: { employeeId: string; month: str
               {filter === 'pending'
                 ? 'Nenhum dia com marcação faltando. Tudo certo!'
                 : filter === 'absent'
-                  ? 'Nenhuma falta no mês.'
+                  ? 'Nenhuma falta no período.'
                   : filter === 'alerts'
-                    ? 'Nenhum alerta de intervalo, horas extras ou descanso no mês.'
-                    : 'Nenhum dia de trabalho neste mês ainda.'}
+                    ? 'Nenhum alerta de intervalo, horas extras ou descanso no período.'
+                    : 'Nenhum dia de trabalho neste período ainda.'}
             </EmptyState>
           </Card>
         ) : (
@@ -592,7 +590,7 @@ export function DaysView({ employeeId, month }: { employeeId: string; month: str
               <tfoot>
                 <tr className="border-t border-white/10 bg-white/[0.03] text-sm">
                   <td colSpan={4} className="py-3 pr-3 pl-5 font-semibold text-slate-300">
-                    Total do mês
+                    Total do período
                   </td>
                   <td className="px-3 py-3 text-right font-bold text-white tabular-nums">
                     {formatMinutes(totals.workedMinutes)}

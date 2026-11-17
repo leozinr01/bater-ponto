@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { LocationBadge, OfflineBadge } from '../../components/location';
 import { Alert, Badge, Card, cn, EmptyState, Loading, Pagination, Segmented } from '../../components/ui';
 import { errorMessage } from '../../lib/api';
-import { dateOf, formatDate, formatDateTime, monthRange, timeOf, WEEKDAYS } from '../../lib/format';
+import { dateOf, formatDate, formatDateTime, timeOf, WEEKDAYS } from '../../lib/format';
 import { usePunches } from '../../lib/queries';
 import type { Punch } from '../../lib/types';
 
@@ -67,9 +67,8 @@ function PunchRow({ punch }: { punch: Punch }) {
   );
 }
 
-/** Todas as marcações do mês, inclusive correções e desconsideradas, agrupadas por dia. */
-export function PunchesView({ employeeId, month }: { employeeId: string; month: string }) {
-  const { from, to } = monthRange(month);
+/** Todas as marcações do período, inclusive correções e desconsideradas, agrupadas por dia. */
+export function PunchesView({ employeeId, from, to }: { employeeId: string; from: string; to: string }) {
   const [show, setShow] = useState<'all' | 'valid'>('all');
   const [page, setPage] = useState(1);
 
@@ -104,7 +103,7 @@ export function PunchesView({ employeeId, month }: { employeeId: string; month: 
         <Alert>{errorMessage(punches.error)}</Alert>
       ) : punches.data.data.length === 0 ? (
         <Card>
-          <EmptyState icon={History}>Nenhuma marcação neste mês.</EmptyState>
+          <EmptyState icon={History}>Nenhuma marcação neste período.</EmptyState>
         </Card>
       ) : (
         <div className={cn('space-y-4 transition-opacity', punches.isFetching && 'opacity-60')}>

@@ -24,6 +24,8 @@ export function DailyHoursChart({ bars, todayDate }: { bars: DayBar[]; todayDate
   const top = Math.ceil((max * 1.1) / 60) * 60;
   const pct = (minutes: number) => `${(minutes / top) * 100}%`;
   const gridHours = [0.5, 1].map((f) => Math.round((top * f) / 60) * 60);
+  // Um rótulo a cada poucos dias quando o período é longo
+  const labelStep = Math.max(1, Math.ceil(bars.length / 16));
 
   return (
     <div>
@@ -69,7 +71,7 @@ export function DailyHoursChart({ bars, todayDate }: { bars: DayBar[]; todayDate
               bar.date === todayDate && 'font-bold text-brand-300',
             )}
           >
-            {i % 2 === 0 || bar.date === todayDate ? Number(bar.date.slice(8)) : ''}
+            {i % labelStep === 0 || bar.date === todayDate ? Number(bar.date.slice(8)) : ''}
           </span>
         ))}
       </div>

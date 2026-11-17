@@ -1,11 +1,17 @@
 import { alertLabels, dayStatusLabel } from '../components/timesheet';
 import { api } from './api';
 import { exportTable, type ExportChart, type ExportFormat, type ExportSection, type ExportTable } from './export';
-import { formatDate, formatMinutes, formatSigned, timeOf, WEEKDAYS } from './format';
+import { formatDate, formatMinutes, formatSigned, monthRange, timeOf, WEEKDAYS } from './format';
 import { balanceText, dailyBars, punchColumns } from './timesheet-cells';
 import type { Paginated, ReportItem, Timesheet } from './types';
 
 const dash = (minutes: number | null | undefined) => (minutes ? formatMinutes(minutes) : '–');
+
+/** Parte do nome do arquivo: "2026-11" no mês inteiro, "2026-11-03_a_2026-11-20" num período escolhido. */
+function periodSlug(from: string, to: string) {
+  const month = from.slice(0, 7);
+  return from.endsWith('-01') && to === monthRange(month).to ? month : `${from}_a_${to}`;
+}
 const time = (p: { localTime: string } | null) => (p ? timeOf(p.localTime) : '–');
 
 /** Horas trabalhadas por dia, com a parte prevista do dia como marca. */
@@ -126,7 +132,7 @@ export function timesheetSection(sheet: Timesheet, title?: string): ExportSectio
 /** Monta o PDF completo do espelho de ponto com cabeçalho e metadados. */
 export function buildTimesheetExport(sheet: Timesheet, from: string, to: string): ExportTable {
   return {
-    filename: `espelho-ponto_${fileSlug(sheet.employee.name)}_${from.slice(0, 7)}`,
+    filename: `espelho-ponto_${fileSlug(sheet.employee.name)}_${periodSlug(from, to)}`,
     title: 'Espelho de ponto',
     subtitle: `Período de ${formatDate(from)} a ${formatDate(to)}`,
     meta: [
@@ -159,7 +165,7 @@ export async function exportAllTimesheets(from: string, to: string, format: Expo
     sections.push(timesheetSection(sheet, employee.name));
   }
   await exportTable(format, {
-    filename: `espelho-ponto_todos_${from.slice(0, 7)}`,
+    filename: `espelho-ponto_todos_${periodSlug(from, to)}`,
     title: 'Espelho de ponto',
     subtitle: `Período de ${formatDate(from)} a ${formatDate(to)}`,
     meta: [

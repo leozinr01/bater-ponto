@@ -3,13 +3,13 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { EmployeePicker } from '../components/EmployeePicker';
 import { ExportMenu, pdfCsvOptions, type ExportOption } from '../components/ExportMenu';
-import { MonthNav } from '../components/MonthNav';
+import { MAX_PERIOD_DAYS, PeriodPicker, type Period } from '../components/PeriodPicker';
 import { useToast } from '../components/toast';
 import { Card, cn, EmptyState, PageHeader } from '../components/ui';
 import { errorMessage } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { type ExportFormat, exportTable } from '../lib/export';
-import { currentMonth, monthRange } from '../lib/format';
+import { addDays, currentMonth, monthRange } from '../lib/format';
 import { useTimesheet } from '../lib/queries';
 import { buildTimesheetExport, exportAllTimesheets } from '../lib/timesheet-export';
 import { DaysView } from './records/DaysView';
@@ -26,6 +26,17 @@ const adminExportOptions: ExportOption<RecordsExport>[] = [
   { value: 'csv-todos', label: 'CSV de todos', hint: 'Um bloco por funcionário', icon: FileSpreadsheet },
 ];
 
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Período escolhido no calendário (?de=&ate=), se for válido; senão vale o mês. */
+function periodFrom(params: URLSearchParams): Period | null {
+  const from = params.get('de');
+  const to = params.get('ate');
+  if (!from || !to || !DATE.test(from) || !DATE.test(to) || from > to) return null;
+  if (addDays(from, MAX_PERIOD_DAYS - 1) < to) return null;
+  return { from, to };
+}
+
 /**
  * Registros do mês em duas visões: por dia (o espelho de ponto) e cada marcação
  * individual (com correções). Mês, funcionário e aba ficam na URL.
@@ -36,7 +47,8 @@ export function RecordsPage() {
   const month = params.get('mes') ?? currentMonth();
   const employeeId = (isAdmin && params.get('funcionario')) || '';
   const tab: Tab = params.get('aba') === 'marcacoes' ? 'marcacoes' : 'dias';
-  const { from, to } = monthRange(month);
+  const period = periodFrom(params);
+  const { from, to } = period ?? monthRange(month);
   // O admin não bate ponto: vê a folha de um funcionário (o seletor já escolhe o primeiro)
   const ready = !isAdmin || !!employeeId;
   // Mesma consulta da aba "Por dia": vem do cache, sem buscar de novo
@@ -80,7 +92,27 @@ export function RecordsPage() {
         actions={
           <>
             {isAdmin && <EmployeePicker value={employeeId} onChange={(id) => setParam('funcionario', id)} />}
-            <MonthNav month={month} onChange={(m) => setParam('mes', m === currentMonth() ? '' : m)} />
+            <PeriodPicker
+              month={month}
+              period={period}
+              onChange={(next) =>
+                setParams(
+                  (q) => {
+                    if (next.month === currentMonth()) q.delete('mes');
+                    else q.set('mes', next.month);
+                    if (next.period) {
+                      q.set('de', next.period.from);
+                      q.set('ate', next.period.to);
+                    } else {
+                      q.delete('de');
+                      q.delete('ate');
+                    }
+                    return q;
+                  },
+                  { replace: true },
+                )
+              }
+            />
             {tab === 'dias' &&
               (isAdmin ? (
                 <ExportMenu<RecordsExport> onExport={onExport} options={adminExportOptions} loading={exporting} />
@@ -119,10 +151,10 @@ export function RecordsPage() {
           <EmptyState icon={Users}>Escolha um funcionário no seletor acima para ver a folha de ponto.</EmptyState>
         </Card>
       ) : tab === 'dias' ? (
-        <DaysView employeeId={employeeId} month={month} />
+        <DaysView employeeId={employeeId} from={from} to={to} />
       ) : (
-        // A chave zera a paginação ao trocar de mês ou de funcionário
-        <PunchesView key={`${employeeId}-${month}`} employeeId={employeeId} month={month} />
+        // A chave zera a paginação ao trocar de período ou de funcionário
+        <PunchesView key={`${employeeId}-${from}-${to}`} employeeId={employeeId} from={from} to={to} />
       )}
     </>
   );

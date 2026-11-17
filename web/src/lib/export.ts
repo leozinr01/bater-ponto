@@ -214,6 +214,8 @@ function drawChart(doc: Doc, pageWidth: number, startY: number, chart: ExportCha
 
   const slot = plotWidth / chart.bars.length;
   const barWidth = Math.min(16, slot * 0.68);
+  // Em períodos longos (até 93 dias), um rótulo a cada poucos dias para os números não se encostarem
+  const labelStep = Math.max(1, Math.ceil(chart.bars.length / 31));
   chart.bars.forEach((bar, i) => {
     const x = plotX + i * slot + (slot - barWidth) / 2;
     if (bar.marker) {
@@ -231,9 +233,11 @@ function drawChart(doc: Doc, pageWidth: number, startY: number, chart: ExportCha
       doc.line(x - 1.5, yOf(bar.target), x + barWidth + 1.5, yOf(bar.target));
       doc.setLineDashPattern([], 0);
     }
-    doc.setFontSize(6.5);
-    doc.setTextColor(...COLORS.textMuted);
-    doc.text(bar.label, x + barWidth / 2 - doc.getTextWidth(bar.label) / 2, plotBottom + 9);
+    if (i % labelStep === 0) {
+      doc.setFontSize(6.5);
+      doc.setTextColor(...COLORS.textMuted);
+      doc.text(bar.label, x + barWidth / 2 - doc.getTextWidth(bar.label) / 2, plotBottom + 9);
+    }
   });
 
   // Legenda
