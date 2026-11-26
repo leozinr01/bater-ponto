@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:cpanel": "tsc -b && vite build --mode cpanel",
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "test": "vitest run",
